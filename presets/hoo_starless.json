@@ -1,0 +1,165 @@
+{
+  "name": "hoo_starless",
+  "label": "Bicolore HOO (starless)",
+  "description": "Mono camera + Ha/OIII (or OSC dual band split): the chain of sho_starless without the SII palette step.",
+  "steps": [
+    {
+      "plugin": "crop.auto",
+      "params": {
+        "pad": 24
+      }
+    },
+    {
+      "plugin": "background.auto",
+      "params": {}
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "ext.deepsnr"
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "stretch.statistical",
+      "params": {
+        "target": 0.12,
+        "black_sigma": -2.8,
+        "linked": false
+      },
+      "preview": true
+    },
+    {
+      "plugin": "color.nb_normalization",
+      "params": {
+        "mode": "HOO",
+        "boost": 1.2,
+        "highlight_reduction": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.25
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.2,
+        "masked": true
+      }
+    },
+    {
+      "plugin": "ext.cosmic_clarity",
+      "params": {
+        "mode": "sharpen",
+        "stellar_amount": 0.0,
+        "nonstellar_amount": 0.35
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 0.8,
+        "stars_only": false
+      }
+    },
+    {
+      "plugin": "sharpen.mlt",
+      "params": {
+        "bias": [
+          0.0,
+          0.1,
+          0.075,
+          0.05,
+          0.025
+        ]
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.stretch",
+      "params": {
+        "amount": 5.0,
+        "color_boost": 0.5,
+        "reduce": 0.0,
+        "remove_green": true
+      }
+    },
+    {
+      "plugin": "stars.morph",
+      "params": {
+        "operator": "selection",
+        "selection": 0.25,
+        "size": 3,
+        "iterations": 3,
+        "amount": 0.6
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.24
+          ],
+          [
+            0.7,
+            0.66
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 1.0
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 1.0
+      }
+    },
+    {
+      "plugin": "look.match",
+      "params": {
+        "sky": 0.08,
+        "nebula": 0.4,
+        "saturation": 0.3,
+        "white": 0.95,
+        "faint": 0.03
+      }
+    }
+  ]
+}

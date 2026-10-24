@@ -1,0 +1,21 @@
+{
+  "name": "sho",
+  "description": "Narrowband SHO / HOO from a mono camera (tested on the Rosetta). Hubble gold/blue look.",
+  "steps": [
+    {"plugin": "crop.auto", "params": {"pad": 24}},
+    {"plugin": "background.poly", "params": {"degree": 2}},
+    {"plugin": "color.neutralize_background"},
+    {"plugin": "noise.wavelet"},
+    {"plugin": "stretch.auto", "params": {"target": 0.08, "shadows_clip": -4.0}},
+    {"plugin": "stretch.auto", "params": {"target": 0.15, "shadows_clip": -5.0}, "preview": true},
+    {"plugin": "color.neutralize_background"},
+    {"plugin": "color.sho_gold"},
+    {"plugin": "stars.reduce", "params": {"amount": 0.7}},
+    {"plugin": "contrast.hdr", "params": {"amount": 0.3}},
+    {"plugin": "contrast.local", "params": {"amount": 0.3}},
+    {"plugin": "contrast.curves"},
+    {"plugin": "contrast.saturation", "params": {"amount": 0.5}},
+    {"plugin": "cosmetic.chroma_noise"},
+    {"plugin": "color.neutralize_background"}
+  ]
+}

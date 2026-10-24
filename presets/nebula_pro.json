@@ -1,0 +1,128 @@
+{
+  "name": "nebula_pro",
+  "description": "Like 'nebula' with the new tools: all-sky reference gradient correction (DSS2 via CDS hips2fits, DBE when offline), SPCC colour calibration (ASTAP + Gaia, falls back to star white balance when offline), deconvolution with the measured PSF, DeepSNR denoise when installed.",
+  "steps": [
+    {
+      "plugin": "crop.auto"
+    },
+    {
+      "plugin": "cosmetic.hot_pixels"
+    },
+    {
+      "plugin": "background.allsky",
+      "params": {
+        "fallback": "dbe"
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "color.white_balance_stars"
+    },
+    {
+      "plugin": "color.spcc",
+      "params": {
+        "timeout": 120
+      }
+    },
+    {
+      "plugin": "color.fix_saturated"
+    },
+    {
+      "plugin": "sharpen.deconvolution",
+      "params": {
+        "psf": "auto",
+        "iterations": 12,
+        "amount": 0.7
+      }
+    },
+    {
+      "plugin": "ext.deepsnr",
+      "params": {
+        "amount": 0.8
+      }
+    },
+    {
+      "plugin": "noise.wavelet",
+      "params": {
+        "strength": 0.5
+      }
+    },
+    {
+      "plugin": "stretch.auto",
+      "params": {
+        "target": 0.08,
+        "shadows_clip": -4.0
+      }
+    },
+    {
+      "plugin": "stretch.auto",
+      "params": {
+        "target": 0.17,
+        "shadows_clip": -5.0
+      },
+      "preview": true
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "stars.reduce",
+      "params": {
+        "amount": 0.75
+      }
+    },
+    {
+      "plugin": "stars.halo_reduce",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.8
+      }
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.25
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "contrast.curves"
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.35
+      }
+    },
+    {
+      "plugin": "stars.color_boost",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "color.neutralize_background"
+    }
+  ]
+}

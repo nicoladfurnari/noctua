@@ -1,0 +1,100 @@
+{
+  "name": "hoo_pro",
+  "description": "Mono camera + 7 nm Ha/OIII (HOO bicolour). Same chain as sho_pro: degree-1 gradient, DeepSNR, unlinked stretch, NarrowbandNormalization of OIII to Ha, StarNet, contrast on the starless nebula, Cosmic Clarity, stars back with magenta removed.",
+  "steps": [
+    {
+      "plugin": "crop.auto",
+      "params": {
+        "pad": 24
+      }
+    },
+    {
+      "plugin": "background.poly",
+      "params": {
+        "degree": 1
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "ext.deepsnr"
+    },
+    {
+      "plugin": "stretch.statistical",
+      "params": {
+        "target": 0.14,
+        "linked": false,
+        "black_sigma": -2.8
+      },
+      "preview": true
+    },
+    {
+      "plugin": "color.nb_normalization",
+      "params": {
+        "mode": "HOO",
+        "boost": 1.3,
+        "highlight_reduction": 0.3
+      }
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.curves"
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.3,
+        "masked": false
+      }
+    },
+    {
+      "plugin": "ext.cosmic_clarity",
+      "params": {
+        "mode": "sharpen",
+        "stellar_amount": 0.0,
+        "nonstellar_amount": 0.5
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 0.85,
+        "reduce": 0.4
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 0.5,
+        "stars_only": false
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "stars_only": true
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    }
+  ]
+}

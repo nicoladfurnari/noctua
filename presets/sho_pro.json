@@ -1,0 +1,103 @@
+{
+  "name": "sho_pro",
+  "description": "Mono camera + 7 nm Ha/OIII/SII (SHO). degree-1 gradient (GraXpert's AI removes nebulae that fill the frame), DeepSNR on linear data, unlinked statistical stretch, NarrowbandNormalization of OIII/SII to Ha, StarNet: Hubble palette and contrast on the starless nebula, Cosmic Clarity sharpen, stars added back smaller with magenta removed. External tools are skipped when missing.",
+  "steps": [
+    {
+      "plugin": "crop.auto",
+      "params": {
+        "pad": 24
+      }
+    },
+    {
+      "plugin": "background.poly",
+      "params": {
+        "degree": 1
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "ext.deepsnr"
+    },
+    {
+      "plugin": "stretch.statistical",
+      "params": {
+        "target": 0.12,
+        "black_sigma": -2.8,
+        "linked": false
+      },
+      "preview": true
+    },
+    {
+      "plugin": "color.nb_normalization",
+      "params": {
+        "mode": "SHO",
+        "boost": 1.2,
+        "sii_boost": 1.0,
+        "highlight_reduction": 0.3
+      }
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "color.sho_gold",
+      "params": {
+        "amount": 0.85,
+        "gold": 0.7,
+        "blue": 0.12
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.12
+      }
+    },
+    {
+      "plugin": "contrast.curves"
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.15,
+        "masked": true
+      }
+    },
+    {
+      "plugin": "ext.cosmic_clarity",
+      "params": {
+        "mode": "sharpen",
+        "stellar_amount": 0.0,
+        "nonstellar_amount": 0.35
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 0.8,
+        "reduce": 0.6
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 0.8,
+        "stars_only": false
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "stars_only": true
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    }
+  ]
+}

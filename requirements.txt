@@ -1,0 +1,16 @@
+numpy
+scipy
+astropy
+tifffile
+pillow
+opencv-python-headless
+astroalign
+fastapi
+uvicorn[standard]
+python-multipart
+cupy-cuda12x[ctk]   # optional: NVIDIA GPU acceleration (multi-GPU)
+pytest   # tests
+httpx    # tests: FastAPI TestClient
+truststore   # HTTPS via the OS certificate store (VizieR/CDS chains)
+psutil         # live CPU/RAM load in the GUI, memory planning
+nvidia-ml-py   # live GPU load in the GUI (optional)

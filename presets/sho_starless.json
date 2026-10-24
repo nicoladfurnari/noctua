@@ -1,0 +1,174 @@
+{
+  "name": "sho_starless",
+  "label": "Banda stretta SHO (starless)",
+  "description": "Mono camera + Ha/OIII/SII, the starless method (tuned on Rosetta, Sh2-252, IC444 against the user's SHO finals): background.auto (DBE for a small object - GraXpert ate the faint outer nebula of Sh2-252 -, plane when nebulosity fills the frame), DeepSNR while linear, StarNet right after (linear), unlinked statistical stretch, NarrowbandNormalization to Ha, Hubble gold/blue palette and contrast on the nebula alone, Cosmic Clarity, MultiscaleLinearTransform 5 layers; the stars alone (stretch, green and magenta removed, 3 morphological transformations keeping the cores bright, mild curve); recombined; look.match (sky 0.08, faint 0.03, nebula 0.42, saturation 0.25).",
+  "steps": [
+    {
+      "plugin": "crop.auto",
+      "params": {
+        "pad": 24
+      }
+    },
+    {
+      "plugin": "background.auto",
+      "params": {}
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "ext.deepsnr"
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "stretch.statistical",
+      "params": {
+        "target": 0.12,
+        "black_sigma": -2.8,
+        "linked": false
+      },
+      "preview": true
+    },
+    {
+      "plugin": "color.nb_normalization",
+      "params": {
+        "mode": "SHO",
+        "boost": 1.2,
+        "highlight_reduction": 0.3,
+        "sii_boost": 1.0
+      }
+    },
+    {
+      "plugin": "color.sho_gold",
+      "params": {
+        "amount": 0.85,
+        "gold": 0.7,
+        "blue": 0.12
+      }
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.25
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.2,
+        "masked": true
+      }
+    },
+    {
+      "plugin": "ext.cosmic_clarity",
+      "params": {
+        "mode": "sharpen",
+        "stellar_amount": 0.0,
+        "nonstellar_amount": 0.35
+      }
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 0.8,
+        "stars_only": false
+      }
+    },
+    {
+      "plugin": "sharpen.mlt",
+      "params": {
+        "bias": [
+          0.0,
+          0.1,
+          0.075,
+          0.05,
+          0.025
+        ]
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.stretch",
+      "params": {
+        "amount": 5.0,
+        "color_boost": 0.5,
+        "reduce": 0.0,
+        "remove_green": true
+      }
+    },
+    {
+      "plugin": "stars.morph",
+      "params": {
+        "operator": "selection",
+        "selection": 0.25,
+        "size": 3,
+        "iterations": 3,
+        "amount": 0.6
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.24
+          ],
+          [
+            0.7,
+            0.66
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 1.0
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 1.0
+      }
+    },
+    {
+      "plugin": "look.match",
+      "params": {
+        "sky": 0.08,
+        "nebula": 0.42,
+        "saturation": 0.25,
+        "white": 0.95,
+        "faint": 0.03
+      }
+    }
+  ]
+}

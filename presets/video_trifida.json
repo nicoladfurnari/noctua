@@ -1,0 +1,238 @@
+{
+  "name": "video_trifida",
+  "description": "The workflow of the Italian video 'elaborazione pixinsight workflow 2026' (Celestial Vibrations, Trifid with an Askar 180): automatic colour-gradient linear fit (HLP Astro Image Premiere), PCC with APASS, sharpening and star removal while linear (BlurX/StarX are paid: deconvolution + StarNet instead), denoise, GraXpert, GHS in steps, stars stretched and fixed separately (StarStretch, size, magenta), nebula saturation/curves/unsharp through masks, dark structures, recombination, text label.",
+  "steps": [
+    {
+      "plugin": "crop.auto"
+    },
+    {
+      "plugin": "color.gradient_fit",
+      "params": {
+        "strength": "medium"
+      }
+    },
+    {
+      "plugin": "color.pcc",
+      "params": {
+        "white_reference": "average_spiral",
+        "neutralize_background": false,
+        "timeout": 120
+      }
+    },
+    {
+      "plugin": "sharpen.deconvolution",
+      "params": {
+        "psf": "auto",
+        "iterations": 12,
+        "amount": 0.7
+      }
+    },
+    {
+      "plugin": "ext.rc_astro",
+      "params": {
+        "product": "bxt"
+      }
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "ext.deepsnr",
+      "params": {
+        "amount": 0.8
+      }
+    },
+    {
+      "plugin": "noise.tgv",
+      "params": {
+        "strength_l": 1.0,
+        "strength_c": 2.0
+      }
+    },
+    {
+      "plugin": "ext.graxpert_background",
+      "params": {
+        "smoothing": 0.8
+      }
+    },
+    {
+      "plugin": "background.dbe"
+    },
+    {
+      "plugin": "stretch.auto",
+      "params": {
+        "target": 0.1
+      }
+    },
+    {
+      "plugin": "stretch.ghs",
+      "params": {
+        "D": 2.0,
+        "b": 4.0,
+        "SP": 0.25,
+        "LP": 0.12,
+        "HP": 0.95
+      },
+      "preview": true
+    },
+    {
+      "plugin": "stars.stretch",
+      "params": {
+        "amount": 5.0,
+        "color_boost": 1.0
+      }
+    },
+    {
+      "plugin": "stars.size",
+      "params": {
+        "amount": -0.3
+      }
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.5
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "color.fix_magenta",
+      "params": {
+        "amount": 0.6
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "s",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.5,
+            0.58
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "plugin": "color.selective",
+      "params": {
+        "color": "blue",
+        "saturation": 0.25
+      },
+      "mask": {
+        "type": "channel",
+        "channel": "G",
+        "black": 0.15,
+        "mid": 0.5,
+        "white": 0.8
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            0.18
+          ],
+          [
+            0.6,
+            0.65
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "mask": {
+        "type": "luminance",
+        "black": 0.1,
+        "mid": 0.4,
+        "white": 0.9
+      }
+    },
+    {
+      "plugin": "sharpen.unsharp",
+      "params": {
+        "sigma": 2.0,
+        "amount": 0.5
+      },
+      "mask": {
+        "type": "luminance",
+        "black": 0.15,
+        "mid": 0.45,
+        "white": 0.9
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.2,
+            0.17
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "mask": {
+        "type": "luminance",
+        "black": 0.1,
+        "mid": 0.4,
+        "white": 0.9,
+        "invert": true
+      }
+    },
+    {
+      "plugin": "ext.deepsnr",
+      "params": {
+        "amount": 0.6
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 1.0
+      }
+    },
+    {
+      "plugin": "annotate.text",
+      "params": {
+        "text": "",
+        "position": "bottom-right"
+      }
+    }
+  ]
+}

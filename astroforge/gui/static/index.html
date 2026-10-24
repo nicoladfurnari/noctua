@@ -1,0 +1,403 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Noctua</title>
+<link rel="stylesheet" href="/static/style.css">
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
+<link rel="icon" href="/static/icons/favicon-32.png" sizes="32x32" type="image/png">
+<link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
+<link rel="manifest" href="/static/manifest.json">
+<meta name="theme-color" content="#0e0e0d">
+<link rel="preload" href="/static/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+</head>
+<body>
+<div class="app">
+  <aside class="side">
+    <div class="brand"><svg viewBox="0 0 64 64" aria-hidden="true"><path d="M50 32a22 22 0 1 1-24-21.9A17 17 0 0 0 50 32z" fill="none" stroke="#ece7dc" stroke-width="2.5"/><path d="M38 24l3 3 3-3v9c0 4-2.7 7-6 7s-6-3-6-7z" fill="#ece7dc" transform="translate(-4 -2)"/><circle cx="31.5" cy="28" r="1.4" fill="#e8412f"/><circle cx="36.5" cy="28" r="1.4" fill="#e8412f"/><path d="M46 8c.4 2.8 1.7 4.1 4.5 4.5-2.8.4-4.1 1.7-4.5 4.5-.4-2.8-1.7-4.1-4.5-4.5 2.8-.4 4.1-1.7 4.5-4.5z" fill="#e8412f"/></svg><span>Noctua</span></div>
+    <ol class="steps" id="steps">
+      <li data-step="1"><span class="sn">01<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Sorgenti e frame</li>
+      <li data-step="2"><span class="sn">02<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Impostazioni</li>
+      <li data-step="3"><span class="sn">03<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Elaborazione</li>
+      <li data-step="4"><span class="sn">04<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Risultati</li>
+      <li data-step="5"><span class="sn">05<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Post-produzione</li>
+      <li data-step="6"><span class="sn">06<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Esporta</li>
+    </ol>
+    <div class="side-foot">
+      <div class="queue" id="queue">
+        <div class="qhead">Coda lavori</div>
+        <ul id="qList" class="qlist"><li class="muted">nessun lavoro</li></ul>
+        <details><summary class="muted">Storico</summary><ul id="qHist" class="qlist"></ul></details>
+      </div>
+      <div id="compute" class="muted"></div>
+      <button class="btn small" id="openTools"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-settings"/></svg>Programmi esterni</button>
+      <button class="btn small" id="newProject" title="Ricomincia da zero: cartelle, immagine aperta, passi e anteprime"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-rotate-ccw"/></svg>Nuovo progetto</button>
+      <div class="srvctl" role="group" aria-label="Server">
+        <button class="btn small" id="srvRestart" title="Riavvia il server: carica il codice nuovo, i plugin e i profili, svuota la memoria (controlla anche gli aggiornamenti)"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-refresh-cw"/></svg>Riavvia server</button>
+        <button class="btn small icon" id="srvStop" title="Spegni il server (per riaprire Noctua: start-gui.cmd o l'icona sul desktop)" aria-label="Spegni il server"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-power"/></svg></button>
+      </div>
+      <div id="version" class="muted version" title="versione di Noctua in uso (commit e data)"></div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="updatenotice" id="updateNotice" hidden></div>
+    <div class="updatenotice" id="toolNotice" hidden></div>
+    <header class="loadbar" id="loadbar" aria-label="Carico del computer"></header>
+    <!-- 1 -->
+    <section class="page" data-page="1">
+      <h1>Sorgenti e frame</h1>
+      <p class="lead">Scegli le cartelle con i light e quelle con bias, dark e flat (anche una cartella unica con le
+        sottocartelle): i tipi si riconoscono dagli header FITS e dai nomi, e i frame trovati compaiono qui sotto.</p>
+      <div class="grid2">
+        <div class="card">
+          <h2>Light</h2>
+          <div class="seg" id="lightMode"><button data-v="single" class="on">Un campo</button><button data-v="mosaic">Mosaico</button>
+            <button data-v="multi" title="Lo stesso oggetto ripreso con camere diverse: ogni camera con i suoi master, poi tutto allineato e unito">Più camere</button>
+            <button data-v="hybrid" title="Una foto a colori più Ha / OIII / SII (anche da un'altra camera): allineate e unite con un cursore">Ibrida RGB + banda stretta</button></div>
+          <div id="singleBox">
+            <ul class="paths" id="lightPaths"></ul>
+            <button class="btn" data-browse="light"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-folder-open"/></svg>Aggiungi cartella</button>
+          </div>
+          <div id="mosaicBox" hidden>
+            <p class="hint">Ogni pannello è un campo del mosaico (una o più cartelle di light). I pannelli vengono stackati uno per volta, allineati sulle stelle delle sovrapposizioni e uniti.</p>
+            <div id="panelList"></div>
+            <button class="btn" id="addPanel"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg>Aggiungi pannello</button>
+          </div>
+          <div id="sourcesBox" hidden>
+            <p class="hint" id="sourcesHint"></p>
+            <div id="sourceList"></div>
+            <button class="btn" id="addSource"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg>Aggiungi sorgente</button>
+          </div>
+        </div>
+        <div class="card" id="calibInput">
+          <h2>Calibrazione</h2>
+          <h3 class="sub">File per creare i master <span class="muted">bias, dark, flat, dark flat grezzi</span></h3>
+          <ul class="paths" id="calibPaths"></ul>
+          <div class="row"><button class="btn" data-browse="calib"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-folder-open"/></svg>File per creare i master</button>
+            <button class="btn" id="openMasters" title="Crea subito i master dai file grezzi, con i parametri che scegli">Crea i master…</button></div>
+          <h3 class="sub">Master già pronti <span class="muted">PixInsight, NINA, Noctua (FITS/XISF)</span></h3>
+          <ul class="paths" id="masterPaths"></ul>
+          <button class="btn" data-browse="masters"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-folder-open"/></svg>Master già pronti</button>
+          <p class="muted small">Se per un tipo ci sono sia i file sia un master pronto, si usano i file.</p>
+        </div>
+      </div>
+      <div id="framesBox">
+      <div class="session" id="sessionBox" hidden></div>
+      <div class="frameshead" id="framesHead">
+        <h2>Frame trovati</h2>
+        <span class="muted" id="scanInfo">aggiungi una cartella di light</span>
+        <button class="btn small" id="toScan"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-rotate-ccw"/></svg>Rianalizza</button>
+      </div>
+      <p class="muted small">Scegli il gruppo di light da usare: gruppi con gain, offset o esposizione diversi non vanno mischiati.
+        Si usano tutti i frame spuntati: puoi escluderne a mano dall'elenco o dai provini (clic sulla miniatura). In automatico,
+        durante lo stacking, vengono scartati solo i frame peggiori (FWHM, eccentricità, stelle: li vedi in Risultati) e i flat
+        con una posa diversa dagli altri.</p>
+      <div class="row kwrow">
+        <label title="Parole chiave FITS che dividono i light in gruppi integrati a parte (WBPP: post-calibration). NIGHT = notte di ripresa">
+          Raggruppa anche per <input type="text" id="g_kw" placeholder="es. TELESCOP, NIGHT"></label>
+        <label title="I bias/dark/flat devono avere lo stesso valore dei light (WBPP: pre-calibration), es. ROTATOR per i flat di ogni rotazione">
+          Calibrazione abbinata per <input type="text" id="g_calkw" placeholder="es. ROTATOR"></label>
+        <label title="Integra ogni gruppo, ognuno con le sue impostazioni, invece del solo gruppo scelto">
+          <input type="checkbox" id="g_all"> Integra tutti i gruppi</label>
+      </div>
+      <div id="lightGroups"></div>
+      </div>
+      <div class="card" id="calibCard" hidden><h2>Calibrazione</h2><div id="calibSummary"></div></div>
+      <div class="actions"><button class="btn primary" id="toSettings">Avanti</button></div>
+      <div class="card subtle">
+        <h2>Hai già un'immagine integrata?</h2>
+        <p>Salta lo stacking e vai direttamente alla post-produzione.</p>
+        <button class="btn" data-browse="post"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-image"/></svg>Apri FITS / XISF…</button>
+      </div>
+    </section>
+
+    <!-- 2 -->
+    <section class="page" data-page="2">
+      <h1>Impostazioni</h1>
+      <div class="grid2">
+        <div class="card">
+          <h2>Calibrazione e debayer</h2>
+          <label class="row"><input type="checkbox" id="s_gpu" checked> Usa le GPU (se presenti)</label>
+          <label class="row"><input type="checkbox" id="s_cosmetic" checked> Correzione hot/cold pixel</label>
+          <label class="row">Pattern Bayer
+            <select id="s_bayer"><option value="">Automatico (verificato sui dati)</option><option>RGGB</option><option>BGGR</option><option>GRBG</option><option>GBRG</option></select></label>
+          <label class="row">Debayer
+            <select id="s_debayer"><option value="rcd">RCD (consigliato)</option><option value="bilinear">Bilineare</option><option value="ea">Edge-aware</option></select></label>
+          <label class="row">Ottimizza il dark
+            <select id="s_darkopt"><option value="auto">Solo se manca il dark con la stessa posa</option><option value="true">Sempre (rumore minimo, amp glow)</option><option value="false">Mai</option></select></label>
+          <label class="row"><input type="checkbox" id="s_libreuse" checked> Libreria master: salva e riusa bias/dark/flat</label>
+          <label class="row"><input type="checkbox" id="s_banding"> Riduzione del banding (righe)</label>
+          <label class="row">Tolleranza esposizione (s) <input type="number" id="s_exptol" value="0" step="10" min="0" title="Integra insieme light di pose diverse, ognuna con il suo dark (WBPP)"></label>
+          <label class="row"><input type="checkbox" id="s_flatsession" checked> Un flat per ogni notte</label>
+          <label class="row"><input type="checkbox" id="s_dualband"> Filtro dual-band su camera a colori (Ha + OIII → HOO)</label>
+        </div>
+        <div class="card">
+          <h2>Selezione frame</h2>
+          <label class="row"><input type="checkbox" id="s_autoreject" checked> Scarta automaticamente i frame peggiori</label>
+          <label class="row">Tolleranza FWHM (σ) <input type="number" id="s_fwhm" value="2" step="0.5" min="0.5"></label>
+          <label class="row">Eccentricità massima <input type="number" id="s_ecc" value="0.75" step="0.05" min="0.3" max="1"></label>
+          <label class="row">Formula di peso
+            <select id="s_weighting"><option value="psf">PSF signal (automatica)</option><option value="standard">Standard</option><option value="nebula">Nebulosa</option><option value="galaxy">Galassia</option><option value="cluster">Ammasso</option></select></label>
+          <label class="row">Approvazione: peso minimo <input type="number" id="s_approval" step="5" min="0" placeholder="es. 70"></label>
+        </div>
+        <div class="card">
+          <h2>Integrazione</h2>
+          <label class="row">Reiezione
+            <select id="s_rej"><option value="auto">Automatica</option><option value="winsorized">Winsorized sigma clipping</option><option value="linear_fit">Linear fit clipping (≥ 20 frame)</option><option value="esd">ESD generalizzato</option><option value="sigma">Sigma clipping</option><option value="percentile">Percentile</option><option value="median">Mediana</option><option value="none">Nessuna (media)</option></select></label>
+          <label class="row">σ basso <input type="number" id="s_low" value="4" step="0.5"></label>
+          <label class="row">σ alto <input type="number" id="s_high" value="3" step="0.5"></label>
+          <label class="row"><input type="checkbox" id="s_weights" checked> Pesi PSF signal (stelle e rumore)</label>
+          <label class="row"><input type="checkbox" id="s_localnorm"> Local normalization (gradienti che cambiano: Luna, inquinamento)</label>
+          <label class="row">Scie di satelliti
+            <select id="s_sat"><option value="auto">Automatico (con meno di 20 frame)</option><option value="true">Sempre</option><option value="false">Mai</option></select></label>
+          <label class="row"><input type="checkbox" id="s_distortion" checked> Correggi la distorsione (quando serve)</label>
+        </div>
+        <div class="card">
+          <h2>Come WBPP</h2>
+          <label class="row" title="Valore aggiunto ai light calibrati, così i pixel scuri non vanno sotto zero">Pedestal
+            <select id="s_pedmode"><option value="0">Nessuno</option><option value="auto">Automatico</option><option value="adu">Valore (ADU)</option></select>
+            <input type="number" id="s_pedestal" value="100" min="0" max="1000" step="10"></label>
+          <label class="row" title="Rigetta per intero le strutture grandi di pixel rigettati: aerei, scie larghe, riflessi (PixInsight LSPR)">
+            <input type="checkbox" id="s_lsr"> Rigetto su larga scala
+            alti <input type="number" id="s_lsrhigh" value="2" min="0" max="6"> bassi <input type="number" id="s_lsrlow" value="0" min="0" max="6"> livelli,
+            crescita <input type="number" id="s_lsrgrow" value="2" min="0" max="10"> px</label>
+          <label class="row" title="Risolve lo stack con ASTAP e scrive le coordinate (WCS) nel file: SPCC, annotazioni e mosaici non devono risolverlo di nuovo">
+            Soluzione astrometrica dello stack <select id="s_solve"><option value="auto">Automatica (se ci sono RA/DEC negli header)</option>
+            <option value="true">Sempre (anche alla cieca)</option><option value="false">Mai</option></select></label>
+          <label class="row" title="Il riferimento della local normalization: integrazione dei frame migliori (meno rumore, WBPP) o un solo frame">
+            Riferimento local normalization <select id="s_lnref"><option value="integration">Integrazione dei migliori</option><option value="single">Un solo frame</option></select>
+            <input type="number" id="s_lnrefn" value="8" min="3" max="30"> frame</label>
+        </div>
+        <div class="card">
+          <h2>Drizzle</h2>
+          <div class="seg" id="s_drizzle"><button data-v="1" class="on">Off</button><button data-v="2">2×</button><button data-v="3">3×</button></div>
+          <label class="row">Pixfrac <input type="range" id="s_pixfrac" min="0.3" max="1" step="0.05" value="0.9"><span id="pixfracV">0.90</span></label>
+          <label class="row">Kernel
+            <select id="s_dzkernel"><option value="square">Square</option><option value="gaussian">Gaussiano</option><option value="lanczos3">Lanczos3 (pixfrac 1, molti frame)</option></select></label>
+          <label class="row"><input type="checkbox" id="s_bayerdz" checked> Bayer drizzle (niente debayer)</label>
+          <label class="row"><input type="checkbox" id="s_dzrej" checked> Rimuovi satelliti e outlier</label>
+          <p class="hint">2× raddoppia la risoluzione, 3× la triplica: servono molti frame e un buon dithering.</p>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Camera mono con filtri</h2>
+        <label class="row"><input type="checkbox" id="s_filters"> Stacka tutti i filtri dello stesso setup e combinali</label>
+        <label class="row">Palette
+          <select id="s_palette"><option value="auto">Automatica</option><option>SHO</option><option>HOO</option><option>RGB</option><option>LRGB</option><option>HaRGB</option></select></label>
+      </div>
+      <div class="card">
+        <h2>Cometa</h2>
+        <label class="row"><input type="checkbox" id="s_comet"> Stacking su stelle e cometa</label>
+        <label class="row">Nucleo nel primo frame (x, y) <input type="number" id="s_cx1" step="1"> <input type="number" id="s_cy1" step="1"></label>
+        <label class="row">Nucleo nell'ultimo frame (x, y) <input type="number" id="s_cx2" step="1"> <input type="number" id="s_cy2" step="1"></label>
+        <p class="hint">Coordinate in pixel del frame di riferimento (le vedi nel blink, con lo zoom). Mosaici: modalità «Mosaico» nella pagina Sorgenti.</p>
+      </div>
+      <div class="card"><label class="row">Cartella di lavoro <input type="text" id="s_work" class="wide"></label></div>
+      <div class="card" id="planCard"><div class="row"><h2 style="margin:0">Piano</h2>
+        <button class="btn small" id="showPlan">Aggiorna il piano</button><span class="muted small" id="planInfo"></span></div>
+        <div id="planBox" class="muted small">Gruppi, frame, master e tempo stimato prima di partire.</div></div>
+      <div class="actions"><button class="btn" data-go="1"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-arrow-left"/></svg>Indietro</button><button class="btn" id="queueStack" title="Aggiunge lo stacking alla coda senza cambiare pagina"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg>Accoda</button><button class="btn primary" id="startStack"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-play"/></svg>Avvia lo stacking</button></div>
+    </section>
+
+    <!-- 3 -->
+    <section class="page" data-page="3">
+      <h1>Elaborazione</h1>
+      <div class="card">
+        <div class="stages" id="stages"></div>
+        <div class="bar"><div id="bar"></div></div>
+        <pre class="log" id="log"></pre>
+      </div>
+      <div class="actions"><button class="btn danger" id="cancelJob"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-x"/></svg>Annulla</button></div>
+    </section>
+
+    <!-- 4 -->
+    <section class="page" data-page="4">
+      <h1>Risultati</h1>
+      <div class="grid2 wide-left">
+        <div class="card"><div class="tabs" id="resTabs"></div><img id="resImg" class="preview" alt=""></div>
+        <div class="card"><h2>Qualità dei frame</h2><div class="seg runsel" id="runSel" hidden></div><p class="hint" id="qNote" hidden></p><div class="charts" id="charts"></div><div class="tablewrap"><table id="qTable"></table></div></div>
+      </div>
+      <div class="card">
+        <h2>Blink</h2>
+        <div class="row">
+          <button class="btn small" id="bkPrev" title="Frame precedente"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-chevron-left"/></svg></button><button class="btn small" id="bkPlay"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-play"/></svg>Play</button><button class="btn small" id="bkNext" title="Frame successivo"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-chevron-right"/></svg></button>
+          <span id="bkName" class="muted"></span>
+          <label><input type="checkbox" id="bkExclude"> Escludi questo frame</label>
+          <button class="btn small" id="bkRerun">Rilancia lo stacking con le esclusioni</button>
+        </div>
+        <div class="row">
+          <button class="btn small" id="bkZoomOut" title="Riduci (rotella giù)"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-minus"/></svg></button>
+          <button class="btn small" id="bkFit">Adatta</button>
+          <button class="btn small" id="bkOne">1:1</button>
+          <button class="btn small" id="bkZoomIn" title="Ingrandisci (rotella su)"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg></button>
+          <span id="bkZoomLbl" class="muted">intero</span>
+          <span class="muted">rotella = zoom, trascina = sposta, ← → = frame precedente/successivo (stessa zona)</span>
+        </div>
+        <div class="bkview" id="bkView"><img id="bkImg" class="preview" alt="" draggable="false"></div>
+      </div>
+      <div class="actions"><button class="btn" data-go="2"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-arrow-left"/></svg>Cambia impostazioni</button><button class="btn primary" data-go="5">Post-produzione<svg class="ic after" aria-hidden="true"><use href="/static/icons.svg#i-arrow-right"/></svg></button></div>
+    </section>
+
+    <!-- 5 -->
+    <section class="page" data-page="5">
+      <div class="posthead"><h1>Post-produzione</h1>
+        <span class="muted small" id="postInput"></span>
+        <button class="btn small" id="closeImage" title="Chiudi l'immagine aperta (resta su disco) e torna all'inizio"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-x"/></svg>Chiudi immagine</button>
+        <div class="postnav"><button class="btn" data-go="4"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-arrow-left"/></svg>Indietro</button><button class="btn primary" data-go="6">Esporta<svg class="ic after" aria-hidden="true"><use href="/static/icons.svg#i-arrow-right"/></svg></button></div></div>
+      <div class="post">
+        <div class="card pipeline">
+          <div class="presetrow">
+            <label class="presetsel">Profilo <select id="presetSel"></select></label>
+            <div class="muted small presetdesc" id="presetDesc"></div>
+            <div class="row presetbtns"><button class="btn small" id="savePreset">Salva</button><button class="btn small" id="renamePreset" title="Dai al profilo un nome tuo">Rinomina</button><button class="btn small" id="refPreset" title="Nuovo profilo con il look di un'immagine finita che ti piace (JPG/PNG/TIFF)">Da immagine…</button></div>
+          </div>
+          <div class="muted small" id="presetAuto"></div>
+          <ol id="stepList" class="steplist"></ol>
+          <div class="row"><button class="btn small" id="addStep"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg>Aggiungi passo…</button>
+            <span class="muted">trascina i passi per riordinarli</span></div>
+        </div>
+        <div class="card viewer">
+          <div class="row viewbar">
+            <label><input type="checkbox" id="before"> Prima / dopo</label>
+            <label title="Dopo StarNet: guarda solo le stelle tolte (si sceglie da solo aprendo un passo applicato alle stelle) o solo la nebulosa">Mostra
+              <select id="viewSel"><option value="">risultato</option><option value="stars">solo stelle</option><option value="starless">solo nebulosa</option></select></label>
+            <label title="Ctrl+K: mostra la maschera del passo aperto (rosso = protetto)"><input type="checkbox" id="showMask"> Mostra maschera</label>
+            <input type="range" id="split" min="0" max="100" value="50" class="split" hidden title="Sinistra: prima, destra: dopo">
+            <span id="elapsed" class="muted"></span>
+            <span class="muted">anteprima ridotta, i programmi esterni si applicano solo all'export</span>
+          </div>
+          <div class="row maskbar"><span id="maskInfo" class="muted"></span></div>
+          <div class="row dbebar" id="dbeBar" hidden><span id="dbeInfo" class="muted"></span><button class="btn small" id="dbeAuto">Ripristina automatici</button></div>
+          <div class="row pickbar" id="pickBar" hidden><span id="pickInfo" class="muted"></span></div>
+          <div class="row zoombar">
+            <button class="btn small" id="zoomOut" title="Riduci (rotella del mouse)"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-minus"/></svg></button>
+            <span id="zoomVal" class="muted">100%</span>
+            <button class="btn small" id="zoomIn" title="Ingrandisci (rotella del mouse)"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg></button>
+            <button class="btn small" id="zoomFit" title="Immagine intera"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-maximize"/></svg>Adatta</button>
+            <button class="btn small" id="zoom11" title="1 pixel dello schermo = 1 pixel dell'immagine">1:1</button>
+            <button class="btn small" id="zoomRender" title="Elabora l'immagine intera alla risoluzione che serve e mostra la zona ingrandita a piena qualità"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-scan"/></svg>Renderizza zoom</button>
+            <label title="Applica anche DeepSNR, Cosmic Clarity, GraXpert... (più lento)"><input type="checkbox" id="zoomExt"> con programmi esterni</label>
+            <span id="zoomInfo" class="muted"></span>
+          </div>
+          <div class="imgwrap" id="postWrap">
+            <div id="zoomLayer" class="zoomlayer">
+              <img id="postImg" class="preview" alt="">
+              <img id="beforeImg" class="beforeimg" alt="" hidden>
+              <div class="splitline" id="splitLine" hidden><span>Prima</span><span>Dopo</span></div>
+              <canvas id="maskCanvas" class="maskov" hidden></canvas>
+              <svg id="dbeSvg" class="dbe" preserveAspectRatio="none" hidden></svg>
+              <div id="toolLayer" class="toollayer" hidden><div id="brushCur" class="brushcur" hidden></div></div>
+            </div>
+            <img id="zoomImg" class="zoomimg" alt="" hidden>
+            <div class="spinner" id="spin"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 6 -->
+    <section class="page" data-page="6">
+      <h1>Esporta</h1>
+      <div class="grid2">
+        <div class="card">
+          <h2>Formati</h2>
+          <label class="row"><input type="checkbox" class="fmt" value="fits" checked> FITS 32 bit</label>
+          <label class="row"><input type="checkbox" class="fmt" value="xisf"> XISF 32 bit (PixInsight)</label>
+          <label class="row"><input type="checkbox" class="fmt" value="tif" checked> TIFF 16 bit</label>
+          <label class="row"><input type="checkbox" class="fmt" value="jpg" checked> JPEG</label>
+          <label class="row">Nome <input type="text" id="outName" value="final"></label>
+          <label class="row">Cartella <input type="text" id="outDir" class="wide"></label>
+          <h2 class="mt">Metadati (header FITS)</h2>
+          <label class="row">Autore <input type="text" id="metaAuthor" class="meta" data-key="author" placeholder="OBSERVER / AUTHOR"></label>
+          <label class="row">Copyright <input type="text" id="metaCopy" class="meta" data-key="copyright" placeholder="es. (c) 2026 Nome Cognome"></label>
+          <label class="row">Telescopio <input type="text" id="metaTel" class="meta" data-key="telescope" placeholder="TELESCOP"></label>
+          <label class="row">Filtro <input type="text" id="metaFilter" class="meta" data-key="filter" placeholder="FILTER"></label>
+          <label class="row top">Note <textarea id="metaNotes" class="meta" data-key="notes" rows="2" placeholder="COMMENT (una riga per commento)"></textarea></label>
+          <div class="row"><button class="btn small" id="showHeader">Mostra header FITS</button>
+            <span class="muted">i campi vuoti lasciano i valori del file di partenza (TELESCOP, FILTER…); scritti nel FITS e nell'XISF</span></div>
+          <div class="actions left"><button class="btn primary" id="export"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-play"/></svg>Elabora a piena risoluzione</button><button class="btn" id="queueExport"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-plus"/></svg>Accoda</button></div>
+          <div class="bar"><div id="bar2"></div></div>
+          <pre class="log small" id="log2"></pre>
+        </div>
+        <div class="card"><img id="finalImg" class="preview" alt=""><ul id="files" class="paths"></ul></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="modal" id="browser" hidden>
+  <div class="modal-box">
+    <div class="row"><button class="btn small" id="bUp" title="Cartella superiore"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-corner-left-up"/></svg></button><code id="bPath"></code></div>
+    <ul id="bList" class="blist"></ul>
+    <div class="actions"><button class="btn" id="bCancel">Annulla</button><button class="btn primary" id="bOk">Scegli questa cartella</button></div>
+  </div>
+</div>
+<div class="modal" id="tools" hidden>
+  <div class="modal-box">
+    <h2>Programmi esterni</h2>
+    <p class="muted">Percorso dell'eseguibile. Se manca, il plugin corrispondente viene saltato.</p>
+    <div id="toolList"></div>
+    <div id="toolVersions" class="muted small"></div>
+    <div class="actions"><button class="btn" id="tFind" title="Cerca nei programmi installati, nel PATH, nelle cartelle abituali e nei profili di N.I.N.A.; i percorsi giusti restano">Cerca i programmi</button>
+      <button class="btn" id="tCancel">Chiudi</button><button class="btn primary" id="tSave">Salva</button></div>
+  </div>
+</div>
+<div class="modal" id="mkModal" hidden>
+  <div class="modal-box wide">
+    <h2>Crea i master</h2>
+    <p class="muted small">Dai file grezzi delle cartelle «File per creare i master»: un master per ogni gruppo compatibile
+      (camera, gain, temperatura, esposizione, filtro, notte), con nome chiaro e header, più un rapporto di qualità.</p>
+    <div id="mkForm" class="mkform">
+      <label class="row">Cartella dei master <input type="text" id="mk_out" class="wide"></label>
+      <div class="row">
+        <label>Formato <select id="mk_fmt"><option value="xisf">XISF (PixInsight)</option><option value="fits">FITS</option></select></label>
+        <label><input type="checkbox" id="mk_lib" checked> Aggiungi alla libreria dei master (riuso automatico)</label>
+      </div>
+      <div class="row" title="Pixel caldi dai dark, pixel morti dai flat, colonne difettose: lo stacking li corregge">
+        <label><input type="checkbox" id="mk_defects" checked> Mappa dei difetti del sensore</label>
+        <label>pixel caldi oltre <input type="number" id="mk_hot" value="10" step="1" min="3" max="50"> sigma</label>
+        <label>morti sotto <input type="number" id="mk_cold" value="0.5" step="0.05" min="0.05" max="0.95"> del flat</label>
+        <label>colonne oltre <input type="number" id="mk_cols" value="8" step="1" min="0" max="50"> sigma</label>
+      </div>
+      <div class="seg mktabs" id="mkTabs"><button data-k="bias" class="on">Bias</button><button data-k="dark">Dark</button>
+        <button data-k="darkflat">Dark flat</button><button data-k="flat">Flat</button></div>
+      <div id="mkType" class="mktype"></div>
+      <div class="row">
+        <button class="btn small" id="mkReset" title="Torna ai valori consigliati per tutti i tipi"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-rotate-ccw"/></svg>Valori consigliati</button>
+        <label title="I master creati durante lo stacking (quando dai i file grezzi) usano questi stessi parametri">
+          <input type="checkbox" id="mk_stack"> Usa questi parametri anche nello stacking</label>
+      </div>
+    </div>
+    <div id="mkStatus" class="mkstatus muted"></div>
+    <div id="mkResult"></div>
+    <div class="actions"><button class="btn" id="mkClose">Chiudi</button>
+      <button class="btn" id="mkUse" hidden title="Aggiunge la cartella ai «Master già pronti» e toglie i file grezzi dalla calibrazione">Usa questi master</button>
+      <button class="btn primary" id="mkStart"><svg class="ic" aria-hidden="true"><use href="/static/icons.svg#i-play"/></svg>Crea i master</button></div>
+  </div>
+</div>
+<div class="modal" id="hdrModal" hidden>
+  <div class="modal-box wide">
+    <h2>Header FITS</h2>
+    <code id="hdrPath"></code>
+    <div class="hdrlist"><table id="hdrTable"></table></div>
+    <div class="actions"><button class="btn" id="hdrClose">Chiudi</button></div>
+  </div>
+</div>
+<div class="modal pkfull" id="picker" hidden>
+  <div class="pkpage">
+    <div class="pkhead">
+      <h2>Aggiungi un passo</h2>
+      <input type="text" id="pkSearch" class="pksearch" placeholder="Cerca: stelle, rumore, gradiente, StarNet…">
+      <span class="muted pklegend"><span class="pkb lin">L</span> sui dati lineari (prima dello stretch)
+        &nbsp;<span class="pkb ext">EXT</span> programma esterno</span>
+      <button class="btn" id="pkCancel">Chiudi (Esc)</button>
+    </div>
+    <div id="pkList" class="pkgrid"></div>
+  </div>
+</div>
+<script src="/static/app.js"></script>
+</body>
+</html>

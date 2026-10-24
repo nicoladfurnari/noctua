@@ -1,0 +1,11 @@
+{
+  "tools": {
+    "starnet": "C:/Programs/StarNet2/starnet2.exe",
+    "deepsnr": "C:/Programs/DeepSNR/deepsnr.exe",
+    "graxpert": "C:/Programs/GraXpert/GraXpert.exe",
+    "cosmic_clarity": "C:/Programs/CosmicClarity/setiastrocosmicclarity.exe",
+    "cosmic_clarity_denoise": "C:/Programs/CosmicClarity/setiastrocosmicclarity_denoise.exe",
+    "astap": "C:/Programs/astap/astap_cli.exe",
+    "rc-astro": "C:/Program Files/RC-Astro/rc-astro.exe"
+  }
+}

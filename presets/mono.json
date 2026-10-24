@@ -1,0 +1,16 @@
+{
+  "name": "mono",
+  "description": "Single filter or luminance (e.g. Ha only): gray-scale result.",
+  "steps": [
+    {"plugin": "crop.auto", "params": {"pad": 24}},
+    {"plugin": "background.poly", "params": {"degree": 2}},
+    {"plugin": "noise.wavelet"},
+    {"plugin": "stretch.auto", "params": {"target": 0.08, "shadows_clip": -4.0}},
+    {"plugin": "stretch.auto", "params": {"target": 0.15, "shadows_clip": -5.0}},
+    {"plugin": "stars.reduce", "params": {"amount": 0.7}},
+    {"plugin": "contrast.hdr", "params": {"amount": 0.4}},
+    {"plugin": "contrast.local", "params": {"amount": 0.35}},
+    {"plugin": "contrast.dark_structure", "params": {"amount": 0.4}},
+    {"plugin": "contrast.curves"}
+  ]
+}

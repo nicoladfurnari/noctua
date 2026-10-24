@@ -1,0 +1,150 @@
+{
+  "name": "rgb_starless",
+  "label": "Nebulosa RGB (starless)",
+  "description": "Colour camera, emission/reflection nebula, the starless method (tuned on M8, M16, Crescent, IC1396, Rosetta from the user's data against the user's reference finals): background.auto (GraXpert for a small object, plane when nebulosity fills the frame), star colour balance, DeepSNR while linear, StarNet right after (linear); the nebula alone: AdaptiveStretch (curve from the signal, chosen over STF + GHS on the user photos 22/10), HDR/local contrast, dark structures, saturation, MultiscaleLinearTransform 5 layers; the stars alone: StarStretch x6, 3 morphological transformations keeping the cores bright, mild curve lowering the wings, SCNR; recombined; look.match (sky 0.08, faint background 0.03, nebula 0.36, saturation 0.43).",
+  "steps": [
+    {
+      "plugin": "crop.auto"
+    },
+    {
+      "plugin": "cosmetic.hot_pixels"
+    },
+    {
+      "plugin": "background.auto",
+      "params": {
+        "small": "graxpert"
+      }
+    },
+    {
+      "plugin": "color.white_balance_stars"
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "ext.deepsnr"
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "stretch.adaptive",
+      "preview": true
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.35
+      }
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "contrast.saturation",
+      "params": {
+        "amount": 0.4,
+        "masked": true
+      }
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.7
+      }
+    },
+    {
+      "plugin": "sharpen.mlt",
+      "params": {
+        "bias": [
+          0.0,
+          0.1,
+          0.075,
+          0.05,
+          0.025
+        ]
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.stretch",
+      "params": {
+        "amount": 6.0,
+        "color_boost": 1.0,
+        "reduce": 0.0
+      }
+    },
+    {
+      "plugin": "stars.morph",
+      "params": {
+        "operator": "selection",
+        "selection": 0.25,
+        "size": 3,
+        "iterations": 3,
+        "amount": 0.6
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.3,
+            0.24
+          ],
+          [
+            0.7,
+            0.66
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.5
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 1.0
+      }
+    },
+    {
+      "plugin": "look.match",
+      "params": {
+        "sky": 0.08,
+        "nebula": 0.36,
+        "saturation": 0.43,
+        "white": 0.95,
+        "faint": 0.03
+      }
+    }
+  ]
+}

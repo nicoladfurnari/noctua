@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+out/
+config.json
+work/
+*.log
+.impeccable/mocks/
+.impeccable/review/
+.impeccable/questions/
+.impeccable/hook.cache.json

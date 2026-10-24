@@ -1,0 +1,215 @@
+{
+  "name": "gaeeb",
+  "description": "The PixInsight workflow by M. Papotti / A. Airola (GAEEB, v4, 14/10/2024) translated step by step: crop, gradient (GraXpert), first noise reduction, SPCC (average spiral), deconvolution with the measured PSF, TGV+MMT denoise, linked MTF stretch, StarNet, nebula enhancement through a range mask, stars, recombination. External tools are skipped when missing.",
+  "steps": [
+    {
+      "plugin": "crop.auto"
+    },
+    {
+      "plugin": "ext.graxpert_background",
+      "params": {
+        "smoothing": 0.0
+      }
+    },
+    {
+      "plugin": "noise.first_layer_subtract",
+      "params": {
+        "amount": 0.5
+      }
+    },
+    {
+      "plugin": "color.white_balance_stars"
+    },
+    {
+      "plugin": "color.spcc",
+      "params": {
+        "white_reference": "average_spiral",
+        "timeout": 120
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "sharpen.deconvolution",
+      "params": {
+        "psf": "auto",
+        "iterations": 10,
+        "deringing": 0.8,
+        "amount": 0.7
+      }
+    },
+    {
+      "plugin": "noise.tgv",
+      "params": {
+        "strength_l": 1.5,
+        "strength_c": 3.0
+      }
+    },
+    {
+      "plugin": "noise.mmt"
+    },
+    {
+      "plugin": "stretch.linked_mtf",
+      "params": {
+        "C": -2.8,
+        "B": 0.15
+      },
+      "preview": true
+    },
+    {
+      "plugin": "stretch.histogram",
+      "params": {
+        "shadows": 0.05
+      }
+    },
+    {
+      "plugin": "cosmetic.chroma_noise"
+    },
+    {
+      "plugin": "stars.starnet"
+    },
+    {
+      "plugin": "contrast.local",
+      "params": {
+        "amount": 0.25,
+        "clip": 2.0
+      },
+      "mask": {
+        "type": "range",
+        "lower": 0.25,
+        "upper": 1.0,
+        "fuzziness": 0.1,
+        "smoothness": 8
+      }
+    },
+    {
+      "plugin": "contrast.dark_structure",
+      "params": {
+        "amount": 0.2
+      }
+    },
+    {
+      "plugin": "contrast.hdr",
+      "params": {
+        "amount": 0.3
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.15,
+            0.13
+          ],
+          [
+            0.5,
+            0.53
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "s",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.5,
+            0.58
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "mask": {
+        "type": "range",
+        "lower": 0.2,
+        "upper": 1.0,
+        "fuzziness": 0.1,
+        "smoothness": 8
+      }
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.7,
+        "preserve_lightness": true
+      }
+    },
+    {
+      "plugin": "contrast.curves",
+      "params": {
+        "channel": "rgb",
+        "points": [
+          [
+            0,
+            0
+          ],
+          [
+            0.25,
+            0.22
+          ],
+          [
+            1,
+            1
+          ]
+        ]
+      },
+      "mask": {
+        "type": "range",
+        "lower": 0.2,
+        "upper": 1.0,
+        "fuzziness": 0.1,
+        "smoothness": 8,
+        "invert": true
+      }
+    },
+    {
+      "plugin": "color.scnr",
+      "params": {
+        "amount": 0.8
+      },
+      "target": "stars"
+    },
+    {
+      "plugin": "stars.recombine",
+      "params": {
+        "amount": 1.0,
+        "reduce": 0.3
+      }
+    },
+    {
+      "plugin": "stars.color_boost",
+      "params": {
+        "amount": 0.4
+      }
+    },
+    {
+      "plugin": "noise.tgv",
+      "params": {
+        "strength_l": 0.7,
+        "strength_c": 1.5
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    }
+  ]
+}

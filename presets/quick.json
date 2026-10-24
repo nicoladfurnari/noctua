@@ -1,0 +1,30 @@
+{
+  "name": "quick",
+  "description": "Fast check of an integration: crop, background, color, stretch.",
+  "steps": [
+    {
+      "plugin": "crop.auto"
+    },
+    {
+      "plugin": "background.poly"
+    },
+    {
+      "plugin": "color.neutralize_background"
+    },
+    {
+      "plugin": "color.white_balance_stars"
+    },
+    {
+      "plugin": "color.fix_saturated"
+    },
+    {
+      "plugin": "stretch.auto",
+      "params": {
+        "target": 0.2
+      }
+    },
+    {
+      "plugin": "color.neutralize_background"
+    }
+  ]
+}

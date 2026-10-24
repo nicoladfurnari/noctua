@@ -1,0 +1,18 @@
+Catalogue data used by astroforge/catalogs.py (object annotation)
+
+deepsky.csv.gz
+  NGC / IC / Messier / Caldwell / addendum objects (Barnard, Melotte, ...):
+    OpenNGC by Mattia Verga and contributors (P. Chevalley, C. Dersch, J.-S. Dieu, S. Godelet),
+    https://github.com/mattiaverga/OpenNGC  (files database_files/NGC.csv and addendum.csv, master,
+    downloaded 2026-10-21; NGC.csv 3,942,946 bytes, addendum.csv 17,496 bytes).
+    Licence: Creative Commons Attribution-ShareAlike 4.0 International (CC-BY-SA-4.0), full text in
+    OpenNGC_LICENSE_CC-BY-SA-4.0.txt. deepsky.csv.gz is an adapted extract of OpenNGC (columns reduced,
+    Dup/NonEx rows removed, coordinates converted to degrees) and is distributed under the same licence.
+  Sharpless (Sh2-) HII regions: Sharpless S. (1959) ApJS 4, 257, via CDS VizieR catalogue VII/20
+    (galactic coordinates converted to ICRS; positions are only ~0.1 deg accurate).
+
+brightstars.csv
+  Stars brighter than V = 3: Yale Bright Star Catalogue, 5th revised ed. (Hoffleit & Warren 1991),
+  via CDS VizieR catalogue V/50. Proper names: IAU Working Group on Star Names (WGSN) list.
+
+Rebuild: python -I astroforge/data/build_catalogs.py <folder with the downloads>
