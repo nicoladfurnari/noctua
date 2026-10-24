@@ -19,7 +19,7 @@ non è concesso ridistribuirlo o riusarlo in altri progetti senza accordo con l'
 
 ## Avvio rapido
 
-Doppio clic su `start-gui.cmd`, poi apri <http://127.0.0.1:8765> nel browser.
+Doppio clic su `start-gui.cmd` (o sull'icona Noctua): si apre da solo il browser su <http://127.0.0.1:8765>.
 Il wizard guida in 7 passi: sorgenti → frame → impostazioni → elaborazione → risultati → post (anteprima dal vivo) → export.
 
 Da riga di comando:

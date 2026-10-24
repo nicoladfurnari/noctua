@@ -1460,7 +1460,30 @@ def _free_port(host, port, wait=30, log=print):
         time.sleep(0.5)
 
 
-def serve(host="127.0.0.1", port=8765, token=None):
+def open_browser_when_up(url, probe, timeout=30.0):
+    """Open the page in the default browser once the server answers (start-gui.cmd: the user double-clicked
+    the icon and expects the page, not a black window). A thread, so the server starts meanwhile."""
+    def go():
+        import urllib.error
+        import urllib.request
+        import webbrowser
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            try:
+                urllib.request.urlopen(probe, timeout=2).close()
+                break
+            except urllib.error.HTTPError:   # an answer (even 401 in network mode): the server is up
+                break
+            except OSError:
+                time.sleep(0.3)
+        try:
+            webbrowser.open(url)
+        except Exception:                    # no browser: the address is printed anyway
+            pass
+    threading.Thread(target=go, daemon=True).start()
+
+
+def serve(host="127.0.0.1", port=8765, token=None, open_browser=False):
     import uvicorn
     _free_port(host, port)
     a = create_app(host, token)
@@ -1470,8 +1493,12 @@ def serve(host="127.0.0.1", port=8765, token=None):
         print(f"Noctua GUI (rete, con token): http://{shown}:{port}/?token={a.state.token}", flush=True)
         print("  il token resta valido finché il server è acceso; i programmi esterni si configurano solo da "
               f"http://127.0.0.1:{port}/?token=... su questo PC", flush=True)
+        url = f"http://127.0.0.1:{port}/?token={a.state.token}"
     else:
         print(f"Noctua GUI: http://{host}:{port}", flush=True)
+        url = f"http://{host}:{port}/"
+    if open_browser:
+        open_browser_when_up(url, f"http://127.0.0.1:{port}/api/version")
     uvicorn.run(a, host=host, port=port, log_level="warning")
 
 

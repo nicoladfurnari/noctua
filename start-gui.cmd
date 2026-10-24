@@ -7,4 +7,4 @@ if not exist .venv\Scripts\python.exe (
 )
 rem controlla e scarica gli aggiornamenti (senza rete o con modifiche locali parte con la versione che c'e')
 rem (una riga sola: l'aggiornamento puo' riscrivere questo file mentre gira, e cmd lo legge riga per riga)
-.venv\Scripts\python.exe -m astroforge.updater & .venv\Scripts\python.exe -m astroforge gui %*
+.venv\Scripts\python.exe -m astroforge.updater & .venv\Scripts\python.exe -m astroforge gui --open %*

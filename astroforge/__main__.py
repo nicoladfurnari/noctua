@@ -86,6 +86,8 @@ def main():
                      help="token di accesso in modalità rete (default: env ASTROFORGE_TOKEN, altrimenti casuale)")
     gui.add_argument("--update", action="store_true",
                      help="prima controlla e scarica gli aggiornamenti (come start-gui.cmd; usato dal riavvio)")
+    gui.add_argument("--open", action="store_true",
+                     help="apre il browser sulla pagina appena il server risponde (lo fa start-gui.cmd)")
     args = ap.parse_args()
 
     if args.cmd == "stack":
@@ -115,7 +117,7 @@ def main():
             from . import updater
             updater.main([])
         from .gui.server import serve
-        serve(args.host, args.port, args.token)
+        serve(args.host, args.port, args.token, open_browser=args.open)
     elif args.cmd == "run":
         meta = dict(m.split("=", 1) for m in args.meta if "=" in m)
         pipeline.run(args.image, args.preset, args.out, previews=not args.no_previews,

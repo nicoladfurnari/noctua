@@ -221,3 +221,23 @@ def test_start_gui_runs_updater_and_gui_on_one_line():
         pytest.skip("start-gui.cmd not in this checkout (dev copy on Hawk)")
     lines = [l for l in cmd.read_text(encoding="utf-8").splitlines() if "astroforge.updater" in l]
     assert len(lines) == 1 and "astroforge gui" in lines[0]
+
+
+def test_open_browser_when_the_server_answers(monkeypatch):
+    import webbrowser
+    from astroforge.gui import server
+    opened = []
+    monkeypatch.setattr(webbrowser, "open", lambda url: opened.append(url))
+    import http.server, threading
+    srv = http.server.HTTPServer(("127.0.0.1", 0), http.server.SimpleHTTPRequestHandler)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        server.open_browser_when_up("http://x/page", f"http://127.0.0.1:{srv.server_port}/nothing", timeout=10)
+        import time
+        for _ in range(100):
+            if opened:
+                break
+            time.sleep(0.05)
+    finally:
+        srv.shutdown()
+    assert opened == ["http://x/page"]       # the 404 is an answer: the server is up
