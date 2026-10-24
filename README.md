@@ -1,15 +1,15 @@
 # Noctua
 
-Software di astrofotografia in Python, a plugin, ancora in fase di sviluppo. Obiettivo: dalla cartella dei grezzi
+Software di astrofotografia in Python, a plugin, ancora in fase di sviluppo. Obiettivo: dalla cartella dei raw
 (light, dark, flat, bias) all'immagine finale, con automazioni e preset, senza dipendere da PixInsight.
 (Il pacchetto Python e i comandi si chiamano `astroforge`, es. `python -m astroforge gui`.)
 
-Stato attuale: **flusso completo dai grezzi all'immagine finale**, con GUI a wizard, GPU (anche più schede),
+Stato attuale: **flusso completo dai raw all'immagine finale**, con GUI a wizard, GPU (anche più schede),
 drizzle 2x/3x, camere a colori e mono con filtri (SHO/HOO/LRGB), local normalization, flat per sessione,
 dark optimization, rimozione satelliti, correzione distorsione, mosaici, comet stacking, dual-band OSC,
 plate solving + SPCC. Stato delle funzioni e limiti in [ROADMAP.md](ROADMAP.md).
 
-**Versione beta** (`0.6.0-beta.1`): funziona dai grezzi all'immagine finale ed è provata sui dati dell'autore
+**Versione beta** (`0.6.0-beta.1`): funziona dai raw all'immagine finale ed è provata sui dati dell'autore
 (QHY168C, QHY163C, QHY163M); con altre camere e programmi di acquisizione possono esserci sorprese. Le
 segnalazioni vanno nelle [Issues](https://github.com/nicoladfurnari/noctua/issues) con l'intestazione FITS di un
 frame e il log del lavoro (pagina Elaborazione).
