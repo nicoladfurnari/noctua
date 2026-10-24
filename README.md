@@ -14,8 +14,12 @@ plate solving + SPCC. Stato delle funzioni e limiti in [ROADMAP.md](ROADMAP.md).
 segnalazioni vanno nelle [Issues](https://github.com/nicoladfurnari/noctua/issues) con l'intestazione FITS di un
 frame e il log del lavoro (pagina Elaborazione).
 
-© 2026 Nicola Furnari. Tutti i diritti riservati: il codice è pubblicato per installare e provare il programma;
-non è concesso ridistribuirlo o riusarlo in altri progetti senza accordo con l'autore.
+**Come contribuire, per ora:** con le segnalazioni e i suggerimenti nelle Issues (c'è un modello da compilare).
+Lo sviluppo resta dell'autore: le pull request non vengono accettate in questa fase, e il fork serve solo a
+leggere il codice.
+
+© 2026 Nicola Furnari. Tutti i diritti riservati: il codice è pubblicato per installare, provare e segnalare;
+non è concesso ridistribuirlo, modificarlo per distribuirlo o riusarlo in altri progetti senza accordo con l'autore.
 
 ## Avvio rapido
 
