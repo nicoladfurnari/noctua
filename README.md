@@ -23,6 +23,23 @@ installare, provare e segnalare; non è concesso ridistribuirlo, modificarlo per
 progetti senza accordo con l'autore. **La release completa, con licenza open source e quindi modificabile, sarà
 disponibile al termine della prima fase di test.**
 
+## Schermate
+
+**Sorgenti e frame**: cartelle, gruppi di light riconosciuti dagli header, provini e anteprima a colori con
+autostretch al passaggio del mouse.
+
+![Sorgenti e frame](docs/screenshots/sorgenti.jpg)
+
+**Visore dei frame**: un clic sul nome (doppio clic sul provino) apre il frame a tutto schermo con stretch
+collegato / separato / lineare, colore dalla matrice di Bayer, zoom, dati dell'header, ed escludi/includi con un tasto.
+
+![Visore dei frame](docs/screenshots/visore.jpg)
+
+**Post-produzione**: profili a passi (qui il flusso GAEEB), anteprima dal vivo, prima/dopo, maschere, zoom
+renderizzato a piena risoluzione.
+
+![Post-produzione](docs/screenshots/post.jpg)
+
 ## Avvio rapido
 
 Doppio clic su `start-gui.cmd` (o sull'icona Noctua): si apre da solo il browser su <http://127.0.0.1:8765>.
