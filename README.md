@@ -18,8 +18,10 @@ frame e il log del lavoro (pagina Elaborazione).
 Lo sviluppo resta dell'autore: le pull request non vengono accettate in questa fase, e il fork serve solo a
 leggere il codice.
 
-© 2026 Nicola Furnari. Tutti i diritti riservati: il codice è pubblicato per installare, provare e segnalare;
-non è concesso ridistribuirlo, modificarlo per distribuirlo o riusarlo in altri progetti senza accordo con l'autore.
+© 2026 Nicola Furnari. Tutti i diritti riservati durante la prima fase di test: il codice è pubblicato per
+installare, provare e segnalare; non è concesso ridistribuirlo, modificarlo per distribuirlo o riusarlo in altri
+progetti senza accordo con l'autore. **La release completa, con licenza open source e quindi modificabile, sarà
+disponibile al termine della prima fase di test.**
 
 ## Avvio rapido
 
