@@ -82,6 +82,13 @@ a { color: var(--text); text-underline-offset: 3px; }
 .main { padding: 24px 28px 32px; max-width: none; }
 .page.on { animation: develop .28s var(--ease); }
 @keyframes develop { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* with the View Transitions API the main column develops as a whole (old page out, new page in); the rail stays */
+html.vt .page.on { animation: none; }
+html.vt .main { view-transition-name: main; }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; }
+::view-transition-old(main) { animation: vtout .12s ease both; }
+::view-transition-new(main) { animation: develop .3s var(--ease) both; }
+@keyframes vtout { to { opacity: 0; } }
 h1 { font-size: 22px; font-weight: 650; letter-spacing: -.015em; margin: 0 0 6px; }
 h2 { font-size: 12.5px; font-weight: 650; color: var(--text); letter-spacing: .07em; text-transform: uppercase; margin: 0 0 14px; }
 h3.sub { font-size: 14px; font-weight: 600; }
@@ -152,11 +159,10 @@ th { color: var(--muted); font-weight: 600; font-size: 12.5px; letter-spacing: .
 td { font-family: var(--mono); font-size: 12.5px; }
 tr.rej td { color: #ff8a7c; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--accent) 70%, transparent); }
 #qTable tr.sel td { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-.chart svg { background: var(--stage); border: 1px solid var(--line); border-radius: var(--radius); }
-.chart polyline { stroke: var(--muted); opacity: .8; }
-.chart circle { fill: var(--text); }
-.chart circle.rej { fill: var(--accent); }
-.chart circle.sel { fill: none; stroke: var(--accent); stroke-width: 2; }
+.chart .plot { background: var(--stage); border: 1px solid var(--line); border-radius: var(--radius); }
+.chart .plot .u-over { border-radius: var(--radius); }
+.histbar { background: var(--panel); border-top: 1px solid var(--line); border-bottom: 0; padding: 6px 10px 2px; }
+.histbar .hist { border-radius: var(--radius); }
 .chart .lbl { font-size: 12.5px; }
 .chartlegend { font-size: 12.5px; }
 
@@ -349,7 +355,11 @@ td .mark path { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linec
 .shot figcaption { display: flex; justify-content: space-between; gap: 6px; padding: 4px 6px; background: var(--rebate);
   font: 12.5px/1.3 var(--mono); color: var(--muted); }
 .shot figcaption span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); }
+.shot img { transition: transform .4s var(--ease); }
 .shot:hover { outline: 1px solid var(--muted); }
+.shot:hover img { transform: scale(1.04); }
+.fhover { animation: rise .2s var(--ease); }
+.fviewer:not([hidden]) { animation: fadein .18s var(--ease); }
 .shot.off img { opacity: .35; }
 .shot.off::after { content: ""; position: absolute; inset: 0 0 26px; pointer-events: none;
   background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath d='M12 14C38 40 62 62 88 88M86 12C62 38 40 60 14 87' fill='none' stroke='%23e8412f' stroke-width='3' stroke-linecap='round' vector-effect='non-scaling-stroke'/%3E%3C/svg%3E") center / 100% 100% no-repeat; }

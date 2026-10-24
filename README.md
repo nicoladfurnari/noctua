@@ -188,3 +188,5 @@ e importalo in `astroforge/plugins/__init__.py`.
 ## Crediti dei dati
 
 Catalogo deep-sky da [OpenNGC](https://github.com/mattiaverga/OpenNGC) di Mattia Verga, licenza CC-BY-SA-4.0 (vedi `astroforge/data/ATTRIBUTION.txt`); stelle brillanti dal Yale Bright Star Catalogue; Sharpless da VizieR VII/20. Curve spettrali di sensori e filtri: approssimazioni dai dati pubblicati, non dati dei costruttori.
+
+L'interfaccia include, dentro il repo e senza CDN, il font Inter (OFL), le icone Lucide (ISC) e la libreria di grafici [uPlot](https://github.com/leeoniya/uPlot) (MIT, `astroforge/gui/static/vendor`).

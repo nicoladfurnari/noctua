@@ -3,7 +3,24 @@ const $ = (s, el = document) => el.querySelector(s);
 const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 // an <img> shown from a blob: the previous object URL is released (every preview, zoom and viewer frame made a
 // new one and the browser kept them all until the page was closed: hundreds of MB in a long session)
-const showBlob = (img, blob) => { if (img.src.startsWith("blob:")) URL.revokeObjectURL(img.src); img.src = URL.createObjectURL(blob); };
+// crossfade: a copy of the old picture stays on top and fades out once the new one has loaded (no flash between
+// two previews); the old blob URL is revoked only when its ghost is gone
+const ghostOut = (img, old) => {
+  if (!old || !img.naturalWidth || !img.parentElement || !img.offsetWidth) return () => { if (old.startsWith("blob:")) URL.revokeObjectURL(old); };
+  const g = img.cloneNode(false); g.removeAttribute("id"); g.className = "ghost"; g.src = old;
+  img.after(g);
+  let done = false;
+  const bye = () => { if (done) return; done = true; g.classList.add("out"); setTimeout(() => { g.remove(); if (old.startsWith("blob:")) URL.revokeObjectURL(old); }, 350); };
+  setTimeout(bye, 4000);                              // the new image never loaded: do not keep the ghost
+  return bye;
+};
+const showBlob = (img, blob, fade = false) => {
+  const old = img.src, bye = fade ? ghostOut(img, old) : null;
+  if (!bye && old.startsWith("blob:")) URL.revokeObjectURL(old);
+  if (bye) img.addEventListener("load", bye, { once: true });
+  img.src = URL.createObjectURL(blob);
+};
+const showSrc = (img, url) => { const bye = ghostOut(img, img.getAttribute("src")); if (bye) img.addEventListener("load", bye, { once: true }); img.src = url; };
 const apiResp = async (url, body) => {
   const r = await fetch(url, body === undefined ? {} : {
     method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -39,17 +56,27 @@ const lightRoots = () => state.mosaic ? state.panels.flat() : multiMode() ? stat
 let scanResult = null, plugins = [], presets = [], stackResult = null;
 
 // ---------------------------------------------------------------- navigation
+const VT = !!document.startViewTransition && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+if (VT) document.documentElement.classList.add("vt");
 function go(n) {
   n = +n;
   if (n === 2) setTimeout(() => showPlan(), 50);
-  $$(".page").forEach(p => p.classList.toggle("on", +p.dataset.page === n));
-  $$("#steps li").forEach(li => {
-    li.classList.toggle("on", +li.dataset.step === n);
-    li.classList.toggle("done", +li.dataset.step < n);
-  });
-  if (n === 5) enterPost();
-  if (n === 6) enterExport();
-  window.scrollTo(0, 0);
+  const apply = () => {
+    $$(".page").forEach(p => p.classList.toggle("on", +p.dataset.page === n));
+    $$("#steps li").forEach(li => {
+      li.classList.toggle("on", +li.dataset.step === n);
+      li.classList.toggle("done", +li.dataset.step < n);
+    });
+    if (n === 5) enterPost();
+    if (n === 6) enterExport();
+    window.scrollTo(0, 0);
+  };
+  const cur = $(".page.on");
+  if (VT && cur && +cur.dataset.page !== n) {     // not on the first page shown: nothing to fade from
+    const t = document.startViewTransition(apply);
+    t.ready.catch(() => {});                       // skipped (hidden tab, another transition): the page changed anyway
+    t.updateCallbackDone.catch(e => console.error(e));
+  } else apply();
 }
 $$("#steps li").forEach(li => li.onclick = () => go(li.dataset.step));
 document.addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); });
@@ -467,7 +494,7 @@ async function showFrameView() {
     if (!r.ok) { let m = await r.text(); try { m = JSON.parse(m).detail || m; } catch (e) {} throw new Error(m); }
     const blob = await r.blob(), info = JSON.parse(r.headers.get("X-Info") || "{}");
     if (token !== fvToken) return;
-    showBlob($(".fvstage img", el), blob);
+    showBlob($(".fvstage img", el), blob, true);
     const parts = [`${info.width}×${info.height} px`, info.bayer ? `Bayer ${info.bayer}` : (info.channels === 3 ? "colore" : "mono"),
       info.type, info.exptime != null ? `${info.exptime} s` : "", info.iso != null ? `ISO ${info.iso}` : info.gain != null ? `gain ${info.gain}` : "",
       info.offset != null ? `offset ${info.offset}` : "", info.temp != null ? `${info.temp}°C` : "", info.filter ? `filtro ${info.filter}` : "",
@@ -737,7 +764,7 @@ function renderResults() {
   $("#resTabs").innerHTML = "";
   tabs.forEach(([name, path], i) => {
     const b = document.createElement("button"); b.textContent = name; b.dataset.name = name;
-    b.onclick = () => { $$("#resTabs button").forEach(x => x.classList.toggle("on", x === b)); $("#resImg").src = imgUrl(path); };
+    b.onclick = () => { $$("#resTabs button").forEach(x => x.classList.toggle("on", x === b)); showSrc($("#resImg"), imgUrl(path)); };
     $("#resTabs").appendChild(b); if (i === tabs.length - 1) b.click();
   });
   // one filter / panel at a time: frames table, charts and blink follow the selector
@@ -765,37 +792,113 @@ function renderFrames(fr) {
   drawCharts(fr); showBlink();
 }
 
-// ---------------------------------------------------------------- frame charts (inline SVG)
-const CHARTS = [["fwhm", "FWHM", 2], ["eccentricity", "Eccentricità", 2], ["snr", "SNR", 0], ["weight", "Peso", 2]];
-const CW = 300, CH = 64, CP = 6;
+// ---------------------------------------------------------------- frame charts (uPlot, cursor shared by all)
+const CHARTS = [["fwhm", "FWHM", 2], ["eccentricity", "Eccentricità", 2], ["stars", "Stelle", 0], ["snr", "SNR", 0],
+                ["background", "Fondo", 4], ["weight", "Peso", 2]];
+const CHART_H = 72;
+const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let framePlots = [], chartsRO = null;
+const plotOf = new WeakMap();
 function drawCharts(fr) {
   const box = $("#charts");
-  if (!fr.length) { box.innerHTML = ""; return; }
-  const X = i => fr.length === 1 ? CW / 2 : CP + i * (CW - 2 * CP) / (fr.length - 1);
-  box.innerHTML = CHARTS.map(([k, name, dec]) => {
-    const v = fr.map(f => Number(f[k]) || 0);
-    const lo = Math.min(...v), hi = Math.max(...v), span = hi - lo || 1;
-    const Y = x => CH - CP - (x - lo) / span * (CH - 2 * CP);
-    const line = v.map((x, i) => `${X(i).toFixed(1)},${Y(x).toFixed(1)}`).join(" ");
-    const dots = v.map((x, i) => `<circle data-i="${i}" cx="${X(i).toFixed(1)}" cy="${Y(x).toFixed(1)}" r="2.6"
-      class="${fr[i].accepted ? "" : "rej"}"><title>${fr[i].file}: ${x.toFixed(dec)}${fr[i].accepted ? "" : " (scartato)"}</title></circle>`).join("");
-    return `<div class="chart"><div class="lbl"><span>${name}</span><span class="muted">${lo.toFixed(dec)} – ${hi.toFixed(dec)}</span></div>
-      <svg viewBox="0 0 ${CW} ${CH}"><polyline points="${line}"/>${dots}</svg></div>`;
-  }).join("") + `<div class="chartlegend muted"><i style="background:var(--accent2)"></i>usato<i style="background:var(--bad)"></i>scartato
-    <i style="background:var(--accent)"></i>selezionato · clic su un grafico per vedere il frame</div>`;
-  $$("svg", box).forEach(svg => svg.onclick = e => {
-    const r = svg.getBoundingClientRect(), fx = (e.clientX - r.left) / r.width * CW;
-    const i = fr.length === 1 ? 0 : Math.round((fx - CP) / (CW - 2 * CP) * (fr.length - 1));
-    selectFrame(Math.max(0, Math.min(fr.length - 1, i)), true);
+  framePlots.forEach(u => u.destroy()); framePlots = []; box.innerHTML = "";
+  if (!fr.length || typeof uPlot === "undefined") return;
+  const x = fr.map((_, i) => i + 1), px = uPlot.pxRatio || devicePixelRatio || 1;
+  const noFile = f => f.file.replace(/\.fits?$/i, "");
+  CHARTS.forEach(([k, name, dec]) => {
+    const v = fr.map(f => Number.isFinite(+f[k]) && f[k] !== null ? +f[k] : null);
+    const nums = v.filter(a => a !== null);
+    if (!nums.length) return;                                   // report without this value (older stacks)
+    const lo = Math.min(...nums), hi = Math.max(...nums), range = `${lo.toFixed(dec)} – ${hi.toFixed(dec)}`;
+    const d = document.createElement("div"); d.className = "chart";
+    d.innerHTML = `<div class="lbl"><span>${name}</span><span class="muted cval">${range}</span></div><div class="plot"></div>`;
+    box.appendChild(d);
+    const el = $(".plot", d), val = $(".cval", d);
+    const u = new uPlot({
+      width: el.clientWidth || 300, height: CHART_H, padding: [8, 10, 4, 6], legend: { show: false },
+      cursor: { sync: { key: "frames" }, y: false, points: { show: false }, drag: { x: false, y: false } },
+      scales: { x: { time: false, range: [0.5, fr.length + 0.5] },
+                y: { range: (u, mn, mx) => mn === mx ? [mn - 1, mx + 1] : [mn - (mx - mn) * .12, mx + (mx - mn) * .12] } },
+      axes: [{ show: false }, { show: false }],
+      series: [{}, { stroke: cssVar("--muted"), width: 1, spanGaps: true, points: { show: false } }],
+      hooks: {
+        // the dots: paper = used, red = rejected, ring = the frame shown in the blink
+        draw: [u => {
+          const c = u.ctx, ok = cssVar("--text"), bad = cssVar("--bad"), sel = cssVar("--accent");
+          c.save();
+          v.forEach((y, i) => {
+            if (y === null) return;
+            const cx = u.valToPos(x[i], "x", true), cy = u.valToPos(y, "y", true);
+            c.beginPath(); c.arc(cx, cy, 2.6 * px, 0, 7); c.fillStyle = fr[i].accepted ? ok : bad; c.fill();
+            if (i === blinkAt) { c.beginPath(); c.arc(cx, cy, 4.6 * px, 0, 7); c.lineWidth = 1.8 * px; c.strokeStyle = sel; c.stroke(); }
+          });
+          c.restore();
+        }],
+        setCursor: [u => {
+          const i = u.cursor.idx;
+          val.textContent = i == null || v[i] === null ? range : `${noFile(fr[i])}: ${v[i].toFixed(dec)}${fr[i].accepted ? "" : " (scartato)"}`;
+        }],
+      },
+    }, [x, v], el);
+    u.over.style.cursor = "pointer";
+    u.over.addEventListener("click", () => { if (u.cursor.idx != null) selectFrame(u.cursor.idx, true); });
+    framePlots.push(u); plotOf.set(el, u);
+    if (!chartsRO) {        // the page may be hidden while the charts are built: size each one when it shows / resizes
+      chartsRO = new ResizeObserver(es => es.forEach(e => {
+        const p = plotOf.get(e.target), w = Math.round(e.contentRect.width);
+        if (p && w && w !== p.width) p.setSize({ width: w, height: CHART_H });
+      }));
+    }
+    chartsRO.observe(el);
   });
+  box.insertAdjacentHTML("beforeend", `<div class="chartlegend muted"><i style="background:var(--accent2)"></i>usato<i style="background:var(--bad)"></i>scartato
+    <i style="background:var(--accent)"></i>selezionato · passa il mouse per leggere, clic per vedere il frame</div>`);
   highlightFrame();
 }
 function highlightFrame() {
-  $$("#charts circle").forEach(c => {
-    const on = +c.dataset.i === blinkAt;
-    c.classList.toggle("sel", on); c.setAttribute("r", on ? "4.2" : "2.6");
-  });
+  framePlots.forEach(u => u.redraw(false, false));
   $$("#qTable tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === blinkAt));
+}
+
+// ---------------------------------------------------------------- live histogram of the preview (uPlot)
+// computed in the browser from the preview JPEG (what is on screen, with view / before-after as shown), log scale
+let histPlot = null, histLast = null;
+const histCanvas = document.createElement("canvas");
+function histOf(img) {
+  const W = Math.min(512, img.naturalWidth), H = Math.max(1, Math.round(W * img.naturalHeight / img.naturalWidth));
+  histCanvas.width = W; histCanvas.height = H;
+  const g = histCanvas.getContext("2d", { willReadFrequently: true });
+  g.drawImage(img, 0, 0, W, H);
+  const d = g.getImageData(0, 0, W, H).data, n = W * H;
+  const cnt = [new Float64Array(256), new Float64Array(256), new Float64Array(256)];
+  for (let i = 0; i < d.length; i += 4) { cnt[0][d[i]]++; cnt[1][d[i + 1]]++; cnt[2][d[i + 2]]++; }
+  const mx = Math.max(...cnt.map(c => Math.max(...Array.from(c.subarray(1, 255)), 1)));   // clipped ends excluded from the scale
+  const lg = cnt.map(c => Array.from(c, v => Math.log1p(v) / Math.log1p(mx)));
+  const lo = (cnt[0][0] + cnt[1][0] + cnt[2][0]) / (3 * n), hi = (cnt[0][255] + cnt[1][255] + cnt[2][255]) / (3 * n);
+  return { x: Array.from({ length: 256 }, (_, i) => i), lg, cnt, n, lo, hi };
+}
+function drawHist(img) {
+  const box = $("#postHist"), info = $("#histInfo");
+  if (!box || !img.naturalWidth || typeof uPlot === "undefined") return;
+  const h = histLast = histOf(img), pc = v => `${(100 * v).toFixed(v < 0.0005 ? 2 : 1)}%`;
+  const summary = () => `neri ${pc(h.lo)} · bianchi ${pc(h.hi)}`;
+  info.textContent = summary();
+  const data = [h.x, ...h.lg];
+  if (!histPlot) {
+    const ser = c => ({ stroke: c, width: 1, fill: c + "2e", points: { show: false } });
+    histPlot = new uPlot({
+      width: box.clientWidth || 300, height: 64, padding: [3, 0, 0, 0], legend: { show: false },
+      cursor: { y: false, points: { show: false }, drag: { x: false, y: false } },
+      scales: { x: { time: false, range: [0, 255] }, y: { range: [0, 1.04] } },
+      axes: [{ show: false }, { show: false }],
+      series: [{}, ser("#ef5a48"), ser("#6cc96f"), ser("#6a9cf2")],
+      hooks: { setCursor: [u => {
+        const i = u.cursor.idx, H = histLast; if (!H) return;
+        info.textContent = i == null ? summary() : `livello ${i}: R ${pc(H.cnt[0][i] / H.n)} · G ${pc(H.cnt[1][i] / H.n)} · B ${pc(H.cnt[2][i] / H.n)}`;
+      }] },
+    }, data, box);
+    new ResizeObserver(() => { const w = box.clientWidth; if (w && w !== histPlot.width) histPlot.setSize({ width: w, height: 64 }); }).observe(box);
+  } else histPlot.setData(data);
 }
 function selectFrame(i, scrollRow) {
   blinkAt = i; showBlink();
@@ -1700,7 +1803,7 @@ async function refresh(upto) {
     const r = await apiResp("/api/preview", { input: state.input, steps: state.steps, upto: upto ?? null, view: $("#viewSel").value });
     if (+r.headers.get("X-Scale")) viewScale = +r.headers.get("X-Scale");
     const blob = await r.blob();
-    showBlob($("#postImg"), blob);
+    showBlob($("#postImg"), blob, true);
     hideZoomRender();
     $("#elapsed").textContent = `${((performance.now() - t) / 1000).toFixed(1)} s` + (upto ? ` — fino al passo ${upto}` : "");
   } catch (e) { $("#elapsed").textContent = "errore: " + e.message.slice(0, 120); }
@@ -1774,7 +1877,7 @@ $("#postWrap").addEventListener("pointercancel", endPan);
 $("#zoomIn").onclick = () => zoomAt(1.5, ...wrapCenter());
 $("#zoomOut").onclick = () => zoomAt(1 / 1.5, ...wrapCenter());
 $("#zoomFit").onclick = () => { zoom.z = 1; zoom.tx = zoom.ty = 0; fitView(); applyZoom(); };
-$("#postImg").addEventListener("load", () => { fitView(); applyZoom(); });
+$("#postImg").addEventListener("load", () => { fitView(); applyZoom(); drawHist($("#postImg")); });
 // 1:1 = one screen pixel per full-resolution image pixel (viewScale = preview width / full width)
 $("#zoom11").onclick = () => {
   const img = $("#postImg"); if (!img.naturalWidth || !viewScale) return;
