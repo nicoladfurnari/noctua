@@ -1,9 +1,8 @@
 # Noctua
 
-*(prima si chiamava AstroForge: il repository, il pacchetto Python e i comandi restano `astroforge`, es. `python -m astroforge gui`)*
-
-Software di astrofotografia in Python, a plugin. Obiettivo: dalla cartella dei grezzi (light, dark, flat, bias)
-all'immagine finale, con automazioni e preset, senza dipendere da PixInsight.
+Software di astrofotografia in Python, a plugin, ancora in fase di sviluppo. Obiettivo: dalla cartella dei grezzi
+(light, dark, flat, bias) all'immagine finale, con automazioni e preset, senza dipendere da PixInsight.
+(Il pacchetto Python e i comandi si chiamano `astroforge`, es. `python -m astroforge gui`.)
 
 Stato attuale: **flusso completo dai grezzi all'immagine finale**, con GUI a wizard, GPU (anche più schede),
 drizzle 2x/3x, camere a colori e mono con filtri (SHO/HOO/LRGB), local normalization, flat per sessione,
