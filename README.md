@@ -85,6 +85,10 @@ pacchetti (CuPy per le GPU solo se c'è una scheda NVIDIA), scrive `config.json`
 `C:\Programs` e mette l'icona **Noctua** sul desktop. Rilanciarlo ripara un'installazione. Niente viene installato
 fuori da quella cartella (a parte Python e Git); per toglierlo basta cancellarla e l'icona.
 
+Tempo medio di installazione, con una connessione normale: **5 minuti** senza GPU (circa 300 MB di pacchetti);
+**10-15 minuti** con una scheda NVIDIA, perché scarica anche CuPy e le librerie CUDA (circa 2 GB); più un paio di
+minuti se mancano Python e Git. Gli avvii successivi sono immediati.
+
 Programmi esterni gratuiti che Noctua sa usare se li trova (`C:\Programs` o indicati dalla GUI, pagina
 Programmi esterni): [StarNet2](https://www.starnetastro.com/), [GraXpert](https://www.graxpert.com/),
 [ASTAP](https://www.hnsky.org/astap.htm) con il catalogo D50 (plate solving e SPCC),
