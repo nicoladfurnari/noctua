@@ -1,7 +1,7 @@
 """AstroForge: astrophotography processing from raw frames to the final image."""
 from functools import lru_cache
 
-__version__ = "0.6.0-beta.1"
+__version__ = "0.6.0-beta.2"
 
 
 @lru_cache(maxsize=1)
@@ -11,7 +11,7 @@ def version_string():
 
 
 def disk_version():
-    """'0.6.0-beta.1 (39d8f29, 2026-10-25)' from the git checkout when there is one, else the package version.
+    """'0.6.0-beta.2 (39d8f29, 2026-10-25)' from the git checkout when there is one, else the package version.
     Read now: after a git pull it differs from version_string() of a program started before."""
     import subprocess
     from pathlib import Path
