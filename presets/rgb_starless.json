@@ -81,7 +81,7 @@
       "plugin": "cosmetic.chroma_noise"
     },
     {
-      "plugin": "stars.stretch",
+      "plugin": "stars.stretch", "target": "stars",
       "params": {
         "amount": 6.0,
         "color_boost": 1.0,
@@ -89,7 +89,7 @@
       }
     },
     {
-      "plugin": "stars.morph",
+      "plugin": "stars.morph", "target": "stars",
       "params": {
         "operator": "selection",
         "selection": 0.25,

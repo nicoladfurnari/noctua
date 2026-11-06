@@ -16,6 +16,15 @@ def auto_params(img, target_bg=0.2, shadows_clip=-2.8):
     st = channel_stats(img)
     c0 = np.mean([max(0.0, med + shadows_clip * mad * 1.4826) for med, mad in st])
     med = np.mean([med for med, _ in st])
+    if med - c0 <= 0:
+        # half of the pixels or more at zero (a linear star layer, a background-subtracted image): the median says
+        # nothing and m went to 0, every pixel above zero to white. Measure the pixels that hold signal instead.
+        a = np.asarray(img)
+        top = float(a.max()) if a.size else 0.0
+        pos = a[a > max(1e-6, 1e-3 * top)]          # (not "> 0": the far wings of the stars are 1e-20)
+        if not pos.size:
+            return 0.0, 0.5
+        c0, med = 0.0, float(np.median(pos))
     m = float(mtf(target_bg, med - c0))
     return float(c0), m
 

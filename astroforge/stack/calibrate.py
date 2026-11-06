@@ -79,7 +79,7 @@ def _row_reader(path):
     p = Path(path)
     if p.suffix.lower() == ".xisf":
         a = np.ascontiguousarray(xisf.read(p)[0][..., 0], np.float32)
-        return (lambda y0, y1, sy=1, sx=1, x0=0: a[y0:y1:sy, x0::sx]), a.shape[0], None
+        return (lambda y0, y1, sy=1, sx=1, x0=0: a[y0:y1:sy, x0::sx].copy()), a.shape[0], None
     hd = fits.open(p, memmap=True, do_not_scale_image_data=True)
     h, d = hd[0].header, hd[0].data
     if d.ndim == 3:

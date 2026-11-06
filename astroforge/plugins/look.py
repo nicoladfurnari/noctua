@@ -49,10 +49,10 @@ class BackgroundAuto(Plugin):
             gx = get("ext.graxpert_background")
             if small == "graxpert" and ctx.tools.get("graxpert"):
                 ctx.log(f"background.auto: nebula {area:.0%} of the frame -> GraXpert AI")
-                return gx.run(img, ctx, **gx.resolve({"smoothing": smoothing}))
+                return gx.run(img, ctx, **gx.scaled(gx.resolve({"smoothing": smoothing}), ctx.scale))
             ctx.log(f"background.auto: nebula {area:.0%} of the frame -> DBE")
             dbe = get("background.dbe")
-            return dbe.run(img, ctx, **dbe.resolve({}))
+            return dbe.run(img, ctx, **dbe.scaled(dbe.resolve({}), ctx.scale))
         ctx.log(f"background.auto: nebula {area:.0%} of the frame -> degree-{degree} surface")
         poly = get("background.poly")
-        return poly.run(img, ctx, **poly.resolve({"degree": degree}))
+        return poly.run(img, ctx, **poly.scaled(poly.resolve({"degree": degree}), ctx.scale))

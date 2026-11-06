@@ -146,7 +146,13 @@ def apply_step(img, step, ctx):
             return img
         layer_step = {k: v for k, v in step.items() if k != "target"}
         linear = ctx.linear                       # a stretch of the star layer alone leaves the image linear
-        ctx.layers["stars"] = apply_step(stars, layer_step, ctx)
+        out = apply_step(stars, layer_step, ctx)
+        # plugins that know the layer (stars.stretch, stars.morph, stars.size) replace it themselves and return
+        # their input: writing that back undid their work
+        if ctx.layers.get("stars") is stars:
+            ctx.layers["stars"] = out
+        if plugins.get(step["plugin"]).category == "stretch":
+            ctx.layers["stars_mode"] = "screen"   # stretched stars are screened, not stretched again at recombine
         ctx.linear = linear
         return img
     pl = plugins.get(step["plugin"])

@@ -152,7 +152,7 @@ def make_masters(folders, out_dir, options=None, log=print, progress=None, cance
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    found = [f for d in folders for f in frames.scan(d)]
+    found = frames.unique([f for d in folders for f in frames.scan(d)])
     raw = [f for f in found if f.type in ("bias", "dark", "flat", "darkflat")]
     ready = [f for f in found if f.type == "master"]
     log(f"{len(raw)} raw calibration frames in {len(folders)} folders"
@@ -192,6 +192,13 @@ def make_masters(folders, out_dir, options=None, log=print, progress=None, cance
             exp = sorted(f.exptime for f in gfs)[len(gfs) // 2]
             kw_build = {**combine_kw(t), "log": log}
             bias = biases.get(setup, (None, None))[1]
+            if bias is None and kind == "flat":
+                near = [k for k in biases if k[:6] == setup[:6]]
+                if near:
+                    num = lambda v: v if isinstance(v, (int, float)) else 0.0
+                    k = min(near, key=lambda k: abs(num(k[6]) - num(setup[6])))
+                    bias = biases[k][1]
+                    log(f"flat {label}: no bias at this temperature, using the one at {num(k[6]):+.0f}C")
             if kind == "flat":
                 df = darkflats.get((setup, round(exp, 3)))
                 cw = t["calibrate_with"]

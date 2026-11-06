@@ -279,6 +279,9 @@ def write_config(root=ROOT, log=print):
         cfg.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+DEPS_PENDING = ".deps-pending"
+
+
 def update(root=ROOT, log=print, deps=True):
     """Fast-forward to origin/main when possible. Returns 'updated', 'current' or the reason it was skipped."""
     if os.environ.get("ASTROFORGE_NO_UPDATE") == "1" or (root / "no-auto-update").exists():
@@ -287,6 +290,13 @@ def update(root=ROOT, log=print, deps=True):
     if not (root / ".git").exists() or shutil.which("git") is None:
         log("aggiornamento saltato: non è un'installazione da git (o git manca)")
         return "no-git"
+    # the code was updated but pip failed (no network, timeout): the next starts are "current" and would never
+    # install the new packages, so the failure is remembered in a marker file and retried here
+    pending = root / DEPS_PENDING
+    if deps and pending.exists():
+        log("riprovo l'installazione dei pacchetti non riuscita l'ultima volta")
+        if install_deps(root, log):
+            pending.unlink(missing_ok=True)
     try:
         branch = _git("rev-parse", "--abbrev-ref", "HEAD", root=root).stdout.strip()
         if branch != BRANCH:
@@ -314,7 +324,8 @@ def update(root=ROOT, log=print, deps=True):
         for line in news[:10]:
             log("  " + line)
         if deps and (root / "requirements.txt").read_text(encoding="utf-8") != old_req:
-            install_deps(root, log)
+            if install_deps(root, log) is False:
+                pending.write_text("pip install non riuscito: si riprova al prossimo avvio\n", encoding="utf-8")
         return "updated"
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         log(f"aggiornamento saltato: {e}")

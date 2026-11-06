@@ -5,6 +5,7 @@ out/
 config.json
 work/
 *.log
+.deps-pending
 .impeccable/mocks/
 .impeccable/review/
 .impeccable/questions/

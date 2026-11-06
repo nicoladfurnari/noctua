@@ -22,8 +22,7 @@ def _gray(img, mode="luminance"):
 
 def _fit_to(ext, img, log, what):
     """External file brought to the current geometry: preview scale, registration, size, channels."""
-    if ext.shape[:2] != img.shape[:2]:
-        ext = align_to(ext, img, log)
+    ext = align_to(ext, img, log)      # also at the same size: masters integrated apart are a few pixels off
     if ext.shape[:2] != img.shape[:2]:
         log(f"{what}: size {ext.shape[1]}x{ext.shape[0]} resized to {img.shape[1]}x{img.shape[0]}")
         ext = cv2.resize(ext, (img.shape[1], img.shape[0]), interpolation=cv2.INTER_AREA)

@@ -501,8 +501,12 @@ def combine_gpu(stack, method="auto", low=4.0, high=3.0, weights=None, iteration
     return combine_xp(stack, method, low, high, weights, iterations, grow_px, xp=cp, rows=rows, **kw)
 
 
+class Cancelled(Exception):
+    pass
+
+
 def combine_chunked(frames, loader, method="auto", low=4.0, high=3.0, weights=None, rows=256, log=None,
-                    workers=None, grow_px=0, mem_fraction=0.5, **kw):
+                    workers=None, grow_px=0, mem_fraction=0.5, cancel=None, **kw):
     """Combine images too big to keep in memory together, row bands spread over GPUs and CPU threads.
 
     frames: list of items; loader(item, y0, y1) -> float32 rows of that frame (must be thread safe
@@ -533,6 +537,8 @@ def combine_chunked(frames, loader, method="auto", low=4.0, high=3.0, weights=No
     args = dict(grow_px=grow_px, **kw)
 
     def load(band):
+        if cancel and cancel():           # every band still queued stops here: "Annulla" does not wait for all
+            raise Cancelled()
         y0, y1 = band
         return np.stack([loader(f, max(0, y0 - pad), min(h, y1 + pad)) for f in frames])
 

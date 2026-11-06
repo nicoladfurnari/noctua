@@ -250,7 +250,11 @@ def image(request: Request, path: str, max_side: int = 1600):
         raise HTTPException(404)
     if p.suffix.lower() in (".jpg", ".jpeg", ".png"):
         return FileResponse(p)
-    return Response(_jpeg(_display(_load_small(p, max_side))), media_type="image/jpeg")
+    try:
+        small = _load_small(p, max(16, int(max_side)))
+    except Exception as e:                       # unreadable / truncated file: a message, not a 500
+        raise HTTPException(400, f"file non leggibile: {str(e)[:200]}")
+    return Response(_jpeg(_display(small)), media_type="image/jpeg")
 
 
 _IDENTIFY = {}
@@ -322,7 +326,10 @@ def thumb(request: Request, path: str, side: int = 220):
     p = Path(path)
     if not p.exists():
         raise HTTPException(404)
-    img, _ = _read_any(p)
+    try:
+        img, _ = _read_any(p)
+    except Exception as e:                       # unreadable / truncated file: a message, not a 500
+        raise HTTPException(400, f"file non leggibile: {str(e)[:200]}")
     h, w = img.shape[:2]
     f = min(1.0, max(16, min(side, 512)) / max(h, w))
     if f < 1:                   # INTER_AREA over a CFA mosaic averages the 2x2 sites: a grey but faithful frame
@@ -340,7 +347,7 @@ def _load_small(path, max_side):
         return hit
     img, _ = _read_any(path)
     h, w = img.shape[:2]
-    _FULL_SHAPE[str(path)] = (w, h)
+    _FULL_SHAPE[_shape_key(path)] = (w, h)
     f = max_side / max(h, w)
     if f < 1:
         img = cv2.resize(img, (round(w * f), round(h * f)), interpolation=cv2.INTER_AREA)
@@ -671,7 +678,7 @@ def stack_plan(request: Request, settings: dict):
     s = dict(settings)
     s.setdefault("work_dir", STACK_DEFAULTS.get("work_dir"))
     try:
-        return Runner(s, log=lambda m: None).plan()
+        return Runner(s, log=lambda m: None, apply_gpu=False).plan()
     except Exception as e:
         raise HTTPException(400, str(e))
 
@@ -859,9 +866,26 @@ def preset_list():
     return [pipeline.load_preset(f) | {"id": f.stem} for f in sorted(pipeline.PRESETS.glob("*.json"))]
 
 
+def _shipped_preset(f):
+    """True for a preset file tracked by git (one that comes with Noctua)."""
+    import shutil
+    import subprocess
+    if not f.exists() or shutil.which("git") is None or not (pipeline.ROOT / ".git").exists():
+        return False
+    try:
+        r = subprocess.run(["git", "ls-files", "--error-unmatch", str(f)], cwd=pipeline.ROOT, capture_output=True,
+                           timeout=15, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0
+
+
 @router.post("/api/presets/{name}")
 def preset_save(name: str, preset: dict):
     safe = "".join(c for c in name if c.isalnum() or c in "-_") or "custom"
+    if _shipped_preset(pipeline.PRESETS / f"{safe}.json"):
+        raise HTTPException(409, f"'{safe}' è un profilo di Noctua e non si sovrascrive (bloccherebbe gli "
+                                 f"aggiornamenti): salvalo con un altro nome, per esempio {safe}_mio")
     preset["name"] = safe
     (pipeline.PRESETS / f"{safe}.json").write_text(json.dumps(preset, indent=2), encoding="utf-8")
     return {"ok": True, "id": safe}
@@ -997,7 +1021,9 @@ def preview_zoom(request: Request, body: dict):
     (auto stretch, look.match, gradient models) see the same image as the export, so the detail matches it.
     body: input, steps, crop [x0, y0, x1, y1] (0..1 of the image), width (screen px of the area),
     external (also run the external programs, slower; otherwise skipped as in the live preview)."""
+    _need_input(body)
     _check_path(request, body["input"])
+    _check_step_paths(request, body.get("steps"))
     path = Path(body["input"])
     if not path.exists():
         raise HTTPException(404, "input not found")
@@ -1060,7 +1086,7 @@ def _restart_cmd(launch):
     import sys
     cmd = [sys.executable, "-m", "astroforge", "gui", "--host", launch.get("host", "127.0.0.1"),
            "--port", str(launch.get("port", 8765)), "--update"]
-    return cmd + (["--token", launch["token"]] if launch.get("token") else [])
+    return cmd + ([f"--token={launch['token']}"] if launch.get("token") else [])
 
 
 def _exit_soon(spawn=None, delay=0.6):
@@ -1093,8 +1119,30 @@ def server_stop(request: Request):
     return {"ok": True, "pid": os.getpid()}
 
 
+def _need_input(body):
+    if not isinstance(body.get("input"), str) or not body["input"]:
+        raise HTTPException(400, "manca l'immagine (input)")
+
+
+# step parameters that are files read by the plugin: in network mode they obey the session folders too
+_PATH_PARAMS = {"color.channel_combine": ("R", "G", "B"), "tools.hdr_composition": ("images",)}
+
+
+def _check_step_paths(request, steps):
+    if not _remote(request):
+        return
+    for s in steps or []:
+        for k in _PATH_PARAMS.get(s.get("plugin"), ()):
+            v = (s.get("params") or {}).get(k)
+            for p in (v if isinstance(v, (list, tuple)) else [v]):
+                if p:
+                    _check_path(request, str(p))
+
+
 def _preview_input(body, request):
+    _need_input(body)
     _check_path(request, body["input"])
+    _check_step_paths(request, body.get("steps"))
     path = Path(body["input"])
     if not path.exists():
         raise HTTPException(404, "input not found")
@@ -1119,6 +1167,8 @@ def _preview_steps(img, steps, ctx):
             continue
         if step["plugin"] in _PREVIEW_SUBST:
             step = {**step, "plugin": _PREVIEW_SUBST[step["plugin"]], "params": {}}
+        if step["plugin"] == "background.auto" and (step.get("params") or {}).get("small") == "graxpert":
+            step = {**step, "params": {**step["params"], "small": "dbe"}}
         if step["plugin"] == "stars.starnet" and step.get("enabled", True) is not False:
             img = pipeline.run_steps(img, done, ctx) if done else img
             done = []
@@ -1142,7 +1192,10 @@ def dbe_samples(request: Request, body: dict):
     if not 0 <= i < len(steps) or steps[i].get("plugin") != "background.dbe":
         raise HTTPException(400, "index must point to a background.dbe step")
     img, ctx = _preview_input(body, request)
-    img = _preview_steps(img, steps[:i], ctx)
+    try:
+        img = _preview_steps(img, steps[:i], ctx)
+    except (ValueError, KeyError) as e:
+        raise HTTPException(400, str(e))
     params = dict(steps[i].get("params") or {})
     if body.get("auto"):
         params["samples"] = []
@@ -1299,10 +1352,17 @@ def _cached_starnet(img, step, ctx):
 _FULL_SHAPE = {}   # (width, height) of the files opened, filled by _load_small
 
 
+def _shape_key(path):
+    try:
+        return str(path), Path(path).stat().st_mtime
+    except OSError:
+        return str(path), 0.0
+
+
 def _full_shape(path):
     """Full-resolution (width, height) of an image: from the cache, else from the file header without reading
     the pixels (FITS) or by loading it."""
-    s = _FULL_SHAPE.get(str(path))
+    s = _FULL_SHAPE.get(_shape_key(path))
     if s:
         return s
     p = Path(path)
@@ -1318,18 +1378,20 @@ def _full_shape(path):
     if not s:
         im = _read_any(p)[0]
         s = (int(im.shape[1]), int(im.shape[0]))
-    _FULL_SHAPE[str(path)] = s
+    _FULL_SHAPE[_shape_key(path)] = s
     return s
 
 
 @router.post("/api/post")
 def post(request: Request, body: dict):
+    _need_input(body)
+    _check_step_paths(request, body.get("steps"))
     _check_path(request, body.get("input", ""))
     _check_path(request, body.get("out_dir") or str(Path(body.get("input", "")).parent))
     job = Job("post", f"Export {body.get('name', 'final')} · {Path(body.get('input', '')).name}")
 
     def fn(job):
-        name = body.get("name", "final")
+        name = "".join(c for c in str(body.get("name") or "final") if c.isalnum() or c in "-_.").strip(".") or "final"
         out_dir = body.get("out_dir") or str(Path(body["input"]).parent)
         job.stage = "post"
         img, header = _read_any(body["input"])
@@ -1349,8 +1411,7 @@ def post(request: Request, body: dict):
             from .. import version_string
             io.save_fits(img, f"{base}.fits", header, extra={"SWCREATE": f"Noctua {version_string()}", **meta})
         if "xisf" in fmts:
-            xisf.write(img, f"{base}.xisf", {k: quoteattr(str(v))[1:-1] for k, v in meta.items()
-                                             if k not in ("COMMENT", "HISTORY")})
+            xisf.write(img, f"{base}.xisf", {k: str(v) for k, v in meta.items() if k not in ("COMMENT", "HISTORY")})
         if "tif" in fmts:
             io.save_tiff(img, f"{base}.tif")
         if "jpg" in fmts:
@@ -1483,6 +1544,14 @@ def open_browser_when_up(url, probe, timeout=30.0):
     threading.Thread(target=go, daemon=True).start()
 
 
+def _local_host(host):
+    """The address this PC reaches the server at: loopback when it listens everywhere, else the host itself
+    (in brackets when IPv6)."""
+    if host in ("0.0.0.0", "::", ""):
+        return "127.0.0.1"
+    return f"[{host}]" if ":" in host and not host.startswith("[") else host
+
+
 def serve(host="127.0.0.1", port=8765, token=None, open_browser=False):
     import uvicorn
     _free_port(host, port)
@@ -1493,12 +1562,12 @@ def serve(host="127.0.0.1", port=8765, token=None, open_browser=False):
         print(f"Noctua GUI (rete, con token): http://{shown}:{port}/?token={a.state.token}", flush=True)
         print("  il token resta valido finché il server è acceso; i programmi esterni si configurano solo da "
               f"http://127.0.0.1:{port}/?token=... su questo PC", flush=True)
-        url = f"http://127.0.0.1:{port}/?token={a.state.token}"
+        url = f"http://{_local_host(host)}:{port}/?token={a.state.token}"
     else:
-        print(f"Noctua GUI: http://{host}:{port}", flush=True)
-        url = f"http://{host}:{port}/"
+        print(f"Noctua GUI: http://{_local_host(host)}:{port}", flush=True)
+        url = f"http://{_local_host(host)}:{port}/"
     if open_browser:
-        open_browser_when_up(url, f"http://127.0.0.1:{port}/api/version")
+        open_browser_when_up(url, f"http://{_local_host(host)}:{port}/api/version")
     uvicorn.run(a, host=host, port=port, log_level="warning")
 
 

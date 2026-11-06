@@ -4,7 +4,7 @@ import numpy as np
 
 from .. import background, color, crop, denoise, masks, stretch
 from ..stats import channel_stats, describe
-from .base import Param, Plugin, register
+from .base import Param, Plugin, register, remap_layers
 
 
 @register
@@ -19,6 +19,10 @@ class AutoCrop(Plugin):
     def run(self, img, ctx, pad, max_frac):
         out, m = crop.auto_crop(img, pad=pad, max_frac=max_frac)
         ctx.log(f"crop L/R/T/B = {m} -> {out.shape[1]}x{out.shape[0]}")
+        left, right, top, bottom = m
+        h, w = img.shape[:2]
+        if any(m):                                # the star layer and the masks are cropped with the image
+            remap_layers(ctx, img, lambda a: a[top:h - bottom, left:w - right].copy(), crop_origin=(left, top))
         return out
 
 

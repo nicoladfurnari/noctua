@@ -2,6 +2,8 @@
 import math
 from dataclasses import dataclass, field
 
+import numpy as np
+
 REGISTRY = {}
 
 
@@ -85,3 +87,31 @@ def get(plugin_id):
         return REGISTRY[plugin_id]
     except KeyError:
         raise KeyError(f"unknown plugin '{plugin_id}'. Available: {', '.join(sorted(REGISTRY))}") from None
+
+
+def remap_layers(ctx, img, fn, crop_origin=None):
+    """A step that changes the geometry (crop, rotation, flip) applies the same change to the layers as large as
+    the image (the star layer waiting for stars.recombine, masks): they were left behind, and the stars came
+    back mirrored / shifted, or the recombine failed on the size. fn takes (H, W) or (H, W, C) arrays.
+    The plate solution: a crop of the image it was solved on shifts its reference pixel (crop_origin = x0, y0);
+    anything else drops it, so the next step that needs it solves again."""
+    h, w = img.shape[:2]
+    for k, v in list(ctx.layers.items()):
+        if isinstance(v, np.ndarray) and v.ndim in (2, 3) and v.shape[:2] == (h, w):
+            ctx.layers[k] = fn(v)
+    wcs = ctx.layers.get("wcs")
+    if wcs is None:
+        return
+    shape = ctx.layers.get("wcs_shape")
+    if crop_origin is not None and (shape is None or tuple(shape[:2]) == (h, w)):
+        try:
+            new = wcs.deepcopy()
+            new.wcs.crpix = [new.wcs.crpix[0] - crop_origin[0], new.wcs.crpix[1] - crop_origin[1]]
+            out = fn(img)
+            new.pixel_shape = (out.shape[1], out.shape[0])
+            ctx.layers["wcs"], ctx.layers["wcs_shape"] = new, out.shape[:2]
+            return
+        except Exception:
+            pass
+    ctx.layers.pop("wcs", None)
+    ctx.layers.pop("wcs_shape", None)

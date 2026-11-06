@@ -207,6 +207,7 @@ code { color: var(--muted); word-break: break-all; }
 .ghost { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2; opacity: 1; transition: opacity .3s ease; }
 .ghost.out { opacity: 0; }
 .imgwrap .ghost { border-radius: 8px; }
+.resview { position: relative; overflow: hidden; border-radius: 8px; }
 .chartlegend { grid-column: 1 / -1; font-size: 11.5px; }
 .chartlegend i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin: 0 4px 0 10px; vertical-align: middle; }
 #qTable tr[data-i] { cursor: pointer; }

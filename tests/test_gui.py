@@ -506,7 +506,7 @@ def test_server_restart_and_stop(monkeypatch):
     assert local.post("/api/server/restart", json={}).status_code == 200
     cmd = calls[-1]
     assert cmd[1:4] == ["-m", "astroforge", "gui"] and "--update" in cmd
-    assert cmd[cmd.index("--port") + 1] == "8800" and cmd[cmd.index("--token") + 1] == "tok"
+    assert cmd[cmd.index("--port") + 1] == "8800" and "--token=tok" in cmd
 
 
 def test_free_port_refuses_other_programs():

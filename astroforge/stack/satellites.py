@@ -79,7 +79,7 @@ def _sample(d, p0, p1, offsets, step=1.0):
     for o in offsets:
         q = (pts + np.float32(o) * nrm).astype(np.float32)
         out.append(cv2.remap(d, q[:, 0].reshape(1, -1), q[:, 1].reshape(1, -1), cv2.INTER_LINEAR,
-                             borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan)[0])
+                             borderMode=cv2.BORDER_CONSTANT, borderValue=(np.nan,) * 4)[0])
     return np.array(out)
 
 

@@ -152,12 +152,12 @@ def warp(img, M, shape, interpolation=cv2.INTER_LANCZOS4, clamp=True, distortion
     h, w = shape
     if distortion is None:
         def rs(a, flags):
-            return cv2.warpAffine(a, M, (w, h), flags=flags, borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan)
+            return cv2.warpAffine(a, M, (w, h), flags=flags, borderMode=cv2.BORDER_CONSTANT, borderValue=(np.nan,) * 4)
     else:
         mx, my = distortion.maps(M, shape, grid)
 
         def rs(a, flags):
-            return cv2.remap(a, mx, my, flags, borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan)
+            return cv2.remap(a, mx, my, flags, borderMode=cv2.BORDER_CONSTANT, borderValue=(np.nan,) * 4)
     out = _remap_channels(img, lambda a: rs(a, interpolation))
     if clamp and interpolation in (cv2.INTER_LANCZOS4, cv2.INTER_CUBIC):
         k = np.ones((3, 3), np.uint8)

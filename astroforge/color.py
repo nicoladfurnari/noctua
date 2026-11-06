@@ -65,6 +65,8 @@ def white_balance_stars(img, max_stars=3000, max_correction=2.0):
             fluxes += img[ys + dy, xs + dx, :] - local
     # discard stars clipped in any channel
     peak_ok = (img[ys, xs, :] < 0.9).all(axis=1) & (fluxes > 0).all(axis=1)
+    if peak_ok.sum() < 30:          # (an empty channel leaves no star: the median of nothing made the image NaN)
+        return img, np.ones(img.shape[-1], np.float32), int(peak_ok.sum())
     fluxes = fluxes[peak_ok]
     ratios = np.median(fluxes / fluxes[:, 1:2], axis=0)  # relative to green
     k = np.clip(1.0 / ratios, 1 / max_correction, max_correction)

@@ -76,14 +76,14 @@
       "preview": true
     },
     {
-      "plugin": "stars.stretch",
+      "plugin": "stars.stretch", "target": "stars",
       "params": {
         "amount": 5.0,
         "color_boost": 1.0
       }
     },
     {
-      "plugin": "stars.size",
+      "plugin": "stars.size", "target": "stars",
       "params": {
         "amount": -0.3
       }

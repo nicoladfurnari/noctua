@@ -6,7 +6,7 @@ const $$ = (s, el = document) => [...el.querySelectorAll(s)];
 // crossfade: a copy of the old picture stays on top and fades out once the new one has loaded (no flash between
 // two previews); the old blob URL is revoked only when its ghost is gone
 const ghostOut = (img, old) => {
-  if (!old || !img.naturalWidth || !img.parentElement || !img.offsetWidth) return () => { if (old.startsWith("blob:")) URL.revokeObjectURL(old); };
+  if (!old || !img.naturalWidth || !img.parentElement || !img.offsetWidth) return () => { if (old && old.startsWith("blob:")) URL.revokeObjectURL(old); };
   const g = img.cloneNode(false); g.removeAttribute("id"); g.className = "ghost"; g.src = old;
   img.after(g);
   let done = false;
@@ -147,8 +147,8 @@ $("#bOk").onclick = () => {
   }
   if (browseMode === "post") {
     if (!browseFile) return;
-    setInput(browseFile); $("#browser").hidden = true;
-    addRoots([browseFile]).then(() => go(5)); return;
+    const f = browseFile; $("#browser").hidden = true;
+    addRoots([f]).then(() => setInput(f)).then(() => go(5)); return;
   }
   if (!browsePath) return;
   addRoots([browsePath]);
@@ -671,11 +671,14 @@ let currentJob = null;
 
 async function follow(jobId, logEl, barEl, onDone, stagesEl) {
   currentJob = jobId; let since = 0;
+  const release = () => { if (currentJob === jobId) currentJob = null; };
+  logEl._job = jobId;                 // a newer job shown in the same box takes it over: the older loop stops writing
   logEl.textContent = "";
   for (;;) {
     let j;
     try { j = await api(`/api/jobs/${jobId}?since=${since}`); }
-    catch (e) { logEl.textContent += `\n${e.message}\n`; currentJob = null; return; }
+    catch (e) { if (logEl._job === jobId) logEl.textContent += `\n${e.message}\n`; release(); return; }
+    if (logEl._job !== jobId) { release(); return; }
     if (j.status === "queued") {
       logEl.textContent = `In coda: posizione ${j.position}. Parte quando finiscono i lavori prima di questo.\n`;
       barEl.style.width = "0%";
@@ -691,7 +694,7 @@ async function follow(jobId, logEl, barEl, onDone, stagesEl) {
     if (stagesEl) stagesEl.innerHTML = STAGES.map((s, i) =>
       `<span class="${i < si ? "done" : i === si ? "on" : ""}">${STAGE_IT[s]}</span>`).join("");
     if (j.status !== "running") {
-      currentJob = null;
+      release();
       if (j.status === "done") { barEl.style.width = "100%"; onDone(j.result); }
       else logEl.textContent += `\n${j.status === "cancelled" ? "Annullato." : "Errore: vedi sopra."}\n`;
       return;
@@ -704,8 +707,11 @@ async function follow(jobId, logEl, barEl, onDone, stagesEl) {
 function setInput(path) {
   const changed = state.input !== path;
   state.input = path; save();
-  if (changed) api(`/api/suggest_preset?path=${encodeURIComponent(path)}`).then(r => {
+  if (!changed) return Promise.resolve();
+  return api(`/api/suggest_preset?path=${encodeURIComponent(path)}`).then(r => {
+    if (state.input !== path) return;                 // another image was opened meanwhile
     state.preset = r.id; state.steps = []; state.autoReason = r.reason; save();
+    if ($(".page.on")?.dataset.page === "5") enterPost();
   }).catch(() => {});
 }
 const openStackResult = res => {
@@ -894,7 +900,7 @@ function drawHist(img) {
       series: [{}, ser("#ef5a48"), ser("#6cc96f"), ser("#6a9cf2")],
       hooks: { setCursor: [u => {
         const i = u.cursor.idx, H = histLast; if (!H) return;
-        info.textContent = i == null ? summary() : `livello ${i}: R ${pc(H.cnt[0][i] / H.n)} · G ${pc(H.cnt[1][i] / H.n)} · B ${pc(H.cnt[2][i] / H.n)}`;
+        info.textContent = i == null ? `neri ${pc(H.lo)} · bianchi ${pc(H.hi)}` : `livello ${i}: R ${pc(H.cnt[0][i] / H.n)} · G ${pc(H.cnt[1][i] / H.n)} · B ${pc(H.cnt[2][i] / H.n)}`;
       }] },
     }, data, box);
     new ResizeObserver(() => { const w = box.clientWidth; if (w && w !== histPlot.width) histPlot.setSize({ width: w, height: 64 }); }).observe(box);
@@ -918,6 +924,7 @@ function showBlink() {
   const f = blinkFrames[blinkAt];
   if (bk.zoom) loadCrop();
   else {
+    bk.token++;                                 // a crop still on its way is stale now
     $("#bkView").classList.remove("zoomed"); $("#bkView").style.height = "";
     $("#bkImg").style.transform = ""; $("#bkImg").src = frameUrl(f);
     // preload the next frame so playback is smooth
@@ -947,7 +954,7 @@ async function loadCrop() {
     const r = await fetch(`/api/frame_crop?path=${encodeURIComponent(f.calibrated)}&x=${bk.cx.toFixed(1)}&y=${bk.cy.toFixed(1)}&zoom=${bk.zoom}&w=${w}&h=${h}`);
     if (!r.ok) throw new Error(`${r.status}`);
     const blob = await r.blob();
-    if (token !== bk.token) return;            // a newer request is on its way
+    if (token !== bk.token || !bk.zoom) return;   // a newer request is on its way, or the zoom was left
     bk.cx = +r.headers.get("X-Cx"); bk.cy = +r.headers.get("X-Cy");
     bk.fw = +r.headers.get("X-Frame-Width"); bk.fh = +r.headers.get("X-Frame-Height");
     if (bk.url) URL.revokeObjectURL(bk.url);
@@ -1792,11 +1799,13 @@ document.addEventListener("keydown", e => {
   }
 });
 
-let refreshTimer = null, refreshing = false, pending = null;
+let refreshTimer = null, refreshing = false, pending = false, pendingUpto;
 const refreshSoon = () => { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => refresh(), 350); };
 async function refresh(upto) {
-  if (refreshing) { pending = upto ?? null; return; }
-  if (zoomAbort) { zoomAbort.abort(); zoomAbort = null; zoomToken++; }   // an old zoom render must not cover the new preview
+  if (refreshing) { pending = true; pendingUpto = upto; return; }
+  if (zoomAbort) {                    // an old zoom render must not cover the new preview
+    zoomAbort.abort(); zoomAbort = null; zoomToken++; $("#zoomInfo").textContent = "";
+  }
   refreshing = true; $("#spin").classList.add("on");
   try {
     const t = performance.now();
@@ -1809,7 +1818,7 @@ async function refresh(upto) {
   } catch (e) { $("#elapsed").textContent = "errore: " + e.message.slice(0, 120); }
   finally {
     refreshing = false; $("#spin").classList.remove("on");
-    if (pending !== null) { const p = pending; pending = null; refresh(p ?? undefined); }
+    if (pending) { pending = false; refresh(pendingUpto); }
     else updateDbe();
   }
 }
@@ -1861,7 +1870,7 @@ $("#postWrap").addEventListener("wheel", e => {
 }, { passive: false });
 // pan: left drag when zoomed and no tool (brush / SP pick / DBE samples) is active; middle button or Alt+drag always
 $("#postWrap").addEventListener("pointerdown", e => {
-  const tool = !$("#toolLayer").hidden || !$("#dbeSvg").hidden;
+  const tool = !$("#toolLayer").hidden || !$("#dbeSvg").hasAttribute("hidden");
   if (!(e.button === 1 || e.altKey || (e.button === 0 && zoom.z > 1 && !tool))) return;
   e.preventDefault();
   zoom.pan = { x: e.clientX, y: e.clientY, tx: zoom.tx, ty: zoom.ty, id: e.pointerId };

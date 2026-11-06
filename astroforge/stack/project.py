@@ -125,8 +125,7 @@ def _rates(gpu_on):
     return rates
 
 
-class Cancelled(Exception):
-    pass
+Cancelled = combine.Cancelled       # one class: raised by the runner and inside combine_chunked
 
 
 def cfa_noise(cfa, pattern):
@@ -141,12 +140,14 @@ def cfa_noise(cfa, pattern):
 
 
 class Runner:
-    def __init__(self, settings, progress=None, log=print, cancel=None):
+    def __init__(self, settings, progress=None, log=print, cancel=None, apply_gpu=True):
         self.s = {**DEFAULTS, **settings}
         self.progress = progress or (lambda stage, frac, msg="": None)
         self.log = log
         self.cancel = cancel or (lambda: False)
-        if "gpu" in settings:
+        # process-wide switch: not for a Runner that only plans (the GUI asks the plan while a job is running,
+        # and unticking "GPU" for the next session moved the running job to the CPU halfway)
+        if "gpu" in settings and apply_gpu:
             gpu.set_enabled(settings["gpu"])
         self.work = Path(self.s["work_dir"])
         self.work.mkdir(parents=True, exist_ok=True)
@@ -176,6 +177,7 @@ class Runner:
         for src in self.s["lights"] + self.s["calibration"]:
             p = Path(src)
             found += [frames.read_frame(p, kws)] if p.is_file() else frames.scan(p, keywords=kws)
+        found = frames.unique(found)
         light_roots = [str(Path(x)) for x in self.s["lights"]]
         under = lambda p, r: p == r or p.startswith(r.rstrip("\\/") + os.sep) or p.startswith(r.rstrip("\\/") + "/")
         lights = [f for f in found if f.type == "light" and any(under(f.path, r) for r in light_roots)]
@@ -248,8 +250,12 @@ class Runner:
                 self.log(f"bias: {len(cands)} groups ({', '.join(f'{exp(c):g} s x{c[0]}' for c in cands)}), "
                          f"using the shortest ({exp(cands[0]):g} s)")
             return cands[0][2]
-        # compare only the frame counts: keys may hold None (no GAIN/temperature) and are not orderable
-        return max(cands, key=lambda c: c[0])[2] if cands else []
+        # keys may hold None (no GAIN/temperature) and are not orderable: rank on numbers only
+        def rank(c):
+            t0, t1 = c[1][6], key[6]
+            dt = abs(t0 - t1) if isinstance(t0, (int, float)) and isinstance(t1, (int, float)) else 0.0
+            return (c[1][:7] != key[:7], dt, -c[0])
+        return min(cands, key=rank)[2] if cands else []
 
     @property
     def library(self):
@@ -335,12 +341,13 @@ class Runner:
             m[kind], ids[kind] = self._build_or_load(kind, fs)
             if kind == "dark":
                 self.report["dark_exptime"] = fs[0].exptime
-        if explicit.get("flat"):
-            m["flat"] = calibrate.load_master(explicit["flat"])
-            return m
-        flats = self._pick(groups, "flat", light_key)
         cfa = s["flat_cfa_normalize"] is True or (s["flat_cfa_normalize"] == "auto" and bool(
             (lights and lights[0].bayer) or s.get("bayer_pattern")))
+        if explicit.get("flat"):
+            from . import masterlib
+            m["flat"] = calibrate.normalize_flat(masterlib.read_master(explicit["flat"])[0], "cfa" if cfa else "global")
+            return m
+        flats = self._pick(groups, "flat", light_key)
         if not flats:
             match = self._from_library("flat", light_key, filter=light_key[8] if len(light_key) > 8 else None,
                                        night=frames.night(lights[0]) if lights else None)
@@ -420,6 +427,7 @@ class Runner:
                 if groups["dark"] or s["masters"].get("dark"):
                     self.log(f"WARNING: no dark for the {exp:g} s lights")
                 continue
+            dexp = dexp or exp                  # a master without EXPTIME: taken as matching
             ratio = exp / dexp if dexp else 1.0
             if bias is None:
                 if abs(ratio - 1) > 0.01:
@@ -432,7 +440,7 @@ class Runner:
             k, k_glow, glow = ratio, None, None
             if opt:
                 raw0 = crop(calibrate.load_raw(next(f for f in lights if f.exptime == exp).path)[0])
-                res = darkopt.optimal_scale(raw0, dark, bias, glow=s["dark_glow"])
+                res = darkopt.optimal_scale(raw0, dark, bias, glow=s["dark_glow"], k_range=(0.0, max(2.0, 2.0 * ratio)))
                 k, k_glow, glow = res if s["dark_glow"] else (res, None, None)
             term = bias + k * (dark - bias)
             if glow is not None and glow.any() and k_glow != k:
@@ -564,6 +572,8 @@ class Runner:
             return calibrate.calibrate(raw - term if term is not None else raw, None, None, self._session_flat(m, f))
 
         def calib_one(i):
+            if self.cancel():                    # the frames still queued in the pool stop at once
+                raise Cancelled()
             cal = calib_one_raw(i)
             if ped:
                 cal = cal + np.float32(ped)
@@ -641,7 +651,11 @@ class Runner:
                 self.log(msg)
             except Exception as e:
                 self.log(f"  registration failed ({e}), frame skipped")
+        wanted = len(use)
         use = [i for i in use if i in transforms]
+        if len(use) < 2 <= wanted:
+            raise ValueError("registration failed on every frame but the reference: nothing to integrate "
+                             "(too few stars, clouds, or frames of different fields?)")
 
         # --- debayer + warp + statistics
         reg_dir = self.work / "registered" / s["output"]
@@ -755,7 +769,7 @@ class Runner:
                      f"growth {lsr.get('growth', 2)} px")
         integ, rl, rh = combine.combine_chunked(use, Loader(), s["rejection"], s["reject_low"], s["reject_high"],
                                                 weights, rows=128, log=prog, grow_px=s["reject_grow"],
-                                                **({"large_scale": lsr} if lsr else {}))
+                                                cancel=self.cancel, **({"large_scale": lsr} if lsr else {}))
         integ = np.nan_to_num(integ, nan=0.0)
         if s["comet"] and s["comet_first_xy"]:
             integ = self._comet(integ, use, ref, lights, transforms, cal_dir, pattern, so, weights, H, W)
@@ -1089,6 +1103,9 @@ class Runner:
         for gi in gis:
             key, lights = sc["light_groups"][gi]
             lights = [f for f in lights if f.path not in set(s["exclude"])]
+            if not lights:
+                out["error"] = "tutti i light del gruppo sono esclusi"
+                continue
             label = frames.describe_key(key)
             ov = (s.get("group_settings") or {}).get(label) or (s.get("group_settings") or {}).get(str(gi)) or {}
             g = {**s, **ov}

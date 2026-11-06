@@ -8,7 +8,7 @@ import numpy as np
 
 from .. import denoise, io, masks, stretch, tgv
 from ..stats import channel_stats, luminance, median_mad
-from .base import Param, Plugin, register
+from .base import Param, Plugin, register, remap_layers
 
 
 def _lst(v, n):
@@ -397,30 +397,39 @@ class Rotate(Plugin):
               "crop": Param(True, help="arbitrary angle: crop away the empty corners")}
 
     def run(self, img, ctx, angle, flip, crop):
-        out = img
         a = float(angle) % 360
-        if abs(a - round(a / 90) * 90) < 1e-9:
-            out = np.rot90(out, int(round(a / 90)) % 4)
-        else:
-            h, w = img.shape[:2]
-            M = cv2.getRotationMatrix2D(((w - 1) / 2, (h - 1) / 2), a, 1.0)
-            cs, sn = abs(M[0, 0]), abs(M[0, 1])
-            nw, nh = int(round(h * sn + w * cs)), int(round(h * cs + w * sn))
-            M[0, 2] += (nw - w) / 2
-            M[1, 2] += (nh - h) / 2
-            out = np.stack([cv2.warpAffine(np.ascontiguousarray(img[..., c]), M, (nw, nh), flags=cv2.INTER_LANCZOS4,
-                                           borderMode=cv2.BORDER_CONSTANT, borderValue=0)
-                            for c in range(img.shape[-1])], -1)
-            if crop:
-                cw, ch = _inscribed(w, h, math.radians(a))
-                cw, ch = max(1, cw - 2), max(1, ch - 2)
-                x0, y0 = (nw - cw) // 2, (nh - ch) // 2
-                out = out[y0:y0 + ch, x0:x0 + cw]
-        if flip == "horizontal":
-            out = out[:, ::-1]
-        elif flip == "vertical":
-            out = out[::-1]
-        return np.ascontiguousarray(np.clip(out, 0, 1), np.float32)
+
+        def one(x):
+            flat = x.ndim == 2
+            x = x[..., None] if flat else x
+            out = x
+            if abs(a - round(a / 90) * 90) < 1e-9:
+                out = np.rot90(out, int(round(a / 90)) % 4)
+            else:
+                h, w = x.shape[:2]
+                M = cv2.getRotationMatrix2D(((w - 1) / 2, (h - 1) / 2), a, 1.0)
+                cs, sn = abs(M[0, 0]), abs(M[0, 1])
+                nw, nh = int(round(h * sn + w * cs)), int(round(h * cs + w * sn))
+                M[0, 2] += (nw - w) / 2
+                M[1, 2] += (nh - h) / 2
+                out = np.stack([cv2.warpAffine(np.ascontiguousarray(x[..., c], np.float32), M, (nw, nh),
+                                               flags=cv2.INTER_LANCZOS4, borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+                                for c in range(x.shape[-1])], -1)
+                if crop:
+                    cw, ch = _inscribed(w, h, math.radians(a))
+                    cw, ch = max(1, cw - 2), max(1, ch - 2)
+                    x0, y0 = (nw - cw) // 2, (nh - ch) // 2
+                    out = out[y0:y0 + ch, x0:x0 + cw]
+            if flip == "horizontal":
+                out = out[:, ::-1]
+            elif flip == "vertical":
+                out = out[::-1]
+            out = np.ascontiguousarray(np.clip(out, 0, 1), np.float32)
+            return out[..., 0] if flat else out
+
+        if a > 1e-9 or flip != "none":            # the star layer and the masks turn with the image
+            remap_layers(ctx, img, one)
+        return one(img)
 
 
 @register
@@ -438,4 +447,7 @@ class ManualCrop(Plugin):
         x0, y0 = min(max(0, int(x0 or 0)), w - 1), min(max(0, int(y0 or 0)), h - 1)
         x1 = w if x1 is None else min(max(x0 + 1, int(x1)), w)
         y1 = h if y1 is None else min(max(y0 + 1, int(y1)), h)
-        return np.ascontiguousarray(img[y0:y1, x0:x1])
+        cut = lambda a: np.ascontiguousarray(a[y0:y1, x0:x1])
+        if (x0, y0, x1, y1) != (0, 0, w, h):
+            remap_layers(ctx, img, cut, crop_origin=(x0, y0))
+        return cut(img)

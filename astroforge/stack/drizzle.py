@@ -533,7 +533,7 @@ def outlier_mask(cfa_or_rgb, M, reference, noise, background, scale_offset, cfa_
         Minv = cv2.invertAffineTransform(M)
         # sample the reference at every input pixel position
         ref_in = cv2.warpAffine(reference, Minv, (W, H), flags=cv2.INTER_LINEAR,
-                                borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan)
+                                borderMode=cv2.BORDER_CONSTANT, borderValue=(np.nan,) * 4)
     else:
         mp = _Mapper(M, distortion, (H, W))
         ref_in, ab = [], ([], [])
@@ -542,7 +542,7 @@ def outlier_mask(cfa_or_rgb, M, reference, noise, background, scale_offset, cfa_
             yy, xx = np.mgrid[y0:y1, 0:W]
             rx, ry = mp(xx.ravel().astype(np.float64), yy.ravel().astype(np.float64))
             r = cv2.remap(reference, rx.reshape(y1 - y0, W).astype(np.float32), ry.reshape(y1 - y0, W).astype(np.float32),
-                          cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=np.nan)
+                          cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=(np.nan,) * 4)
             ref_in.append(r.reshape(y1 - y0, W, -1))
             if local_norm is not None:
                 a, b = _ln_ab(local_norm, rx, ry)

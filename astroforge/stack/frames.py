@@ -1,4 +1,5 @@
 """Scan folders, classify frames (light/dark/flat/bias/darkflat) and group them."""
+import os
 import re
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -182,6 +183,18 @@ def master_exptime(path):
         return float(v) if v not in (None, "") else None
     except Exception:
         return None
+
+
+def unique(found):
+    """The frames once each: folders given twice or nested (the session folder as lights AND as calibration)
+    listed every file twice, and every light was integrated twice."""
+    seen, out = set(), []
+    for f in found:
+        k = os.path.normcase(os.path.abspath(f.path))
+        if k not in seen:
+            seen.add(k)
+            out.append(f)
+    return out
 
 
 def setup_key(f):
