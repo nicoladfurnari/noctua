@@ -295,7 +295,7 @@ def update(root=ROOT, log=print, deps=True):
     pending = root / DEPS_PENDING
     if deps and pending.exists():
         log("riprovo l'installazione dei pacchetti non riuscita l'ultima volta")
-        if install_deps(root, log):
+        if install_deps(root, log) is not False:
             pending.unlink(missing_ok=True)
     try:
         branch = _git("rev-parse", "--abbrev-ref", "HEAD", root=root).stdout.strip()
@@ -324,8 +324,12 @@ def update(root=ROOT, log=print, deps=True):
         for line in news[:10]:
             log("  " + line)
         if deps and (root / "requirements.txt").read_text(encoding="utf-8") != old_req:
-            if install_deps(root, log) is False:
-                pending.write_text("pip install non riuscito: si riprova al prossimo avvio\n", encoding="utf-8")
+            try:
+                pending.write_text("pacchetti da installare: si riprova al prossimo avvio\n", encoding="utf-8")
+            except OSError:
+                pass
+            if install_deps(root, log) is not False:
+                pending.unlink(missing_ok=True)
         return "updated"
     except (OSError, ValueError, subprocess.SubprocessError) as e:
         log(f"aggiornamento saltato: {e}")

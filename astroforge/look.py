@@ -68,7 +68,7 @@ def measure(img):
     L = _lum(a)
     nb = s[neb]
     h = np.degrees(np.arctan2(np.sqrt(3) * (nb[:, 1] - nb[:, 2]), 2 * nb[:, 0] - nb[:, 1] - nb[:, 2])) % 360
-    hist, _ = np.histogram(h, bins=6, range=(-30, 330), weights=_sat(nb))
+    hist, _ = np.histogram((h + 30) % 360 - 30, bins=6, range=(-30, 330), weights=_sat(nb))
     hist = hist / max(hist.sum(), 1e-9)
     return {
         "sky": round(float(np.median(ls[sky])), 4),
@@ -128,6 +128,8 @@ def match(img, sky=0.07, nebula=0.30, saturation=0.40, white=0.95, strength=1.0,
     """Move img (display space) towards the target look. Each adjustment is limited so that a strange
     measurement (frame full of nebula, almost no sky) cannot wreck the image."""
     out = np.clip(np.asarray(img, np.float32), 0, 1)
+    if strength <= 0:
+        return out
     mono = out.shape[-1] == 1
     sky0 = measure(out)["sky"]
     sky = float(np.clip(sky, sky0 - 0.06, sky0 + 0.06))     # never more than this from where it started
@@ -139,6 +141,7 @@ def match(img, sky=0.07, nebula=0.30, saturation=0.40, white=0.95, strength=1.0,
         src = m["sky_rgb"] if (neutral_sky and not mono) else [m["sky"]] * 3
         for c in range(out.shape[-1]):
             s = float(src[c] if not mono else m["sky"])
+            s = m["sky"] + min(k, 1.0) * (s - m["sky"])       # the colour of the sky is neutralised by `strength` too
             if s < 0.98:
                 out[..., c] = t + (out[..., c] - s) * (1 - t) / (1 - s)
         out = np.clip(out, 0, 1)
@@ -175,5 +178,6 @@ def match(img, sky=0.07, nebula=0.30, saturation=0.40, white=0.95, strength=1.0,
         knee = white - 0.15
         x = out
         y = knee + (white - knee) * (1 - np.exp(-(x - knee) / max(white - knee, 1e-3)))
-        out = np.where(x > knee, np.minimum(y, x), x).astype(np.float32)
+        rolled = np.where(x > knee, np.minimum(y, x), x)
+        out = (x + min(strength, 1.0) * (rolled - x)).astype(np.float32)
     return out

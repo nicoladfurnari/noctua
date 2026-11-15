@@ -282,7 +282,7 @@ def run_sources(runner, sources, mode="multi"):
         sub.pop("sources", None)
         r = Runner(sub, progress=runner.progress, log=runner.log, cancel=runner.cancel)
         _, rep = r.run_filters(sub.get("palette", "auto")) if src.get("filters") else r.run()
-        f = result_file(rep, sub.get("drizzle", 1))
+        f = result_file(rep, r.s.get("drizzle", 1))
         files.append(f)
         runs.append({"name": name, "file": f, "frames": rep.get("lights_total"), "setup": rep.get("light_setup")})
         if getattr(r, "header", None) is not None and not hasattr(runner, "header"):

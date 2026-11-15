@@ -185,6 +185,16 @@ def master_exptime(path):
         return None
 
 
+def file_sig(path):
+    """size:mtime of a file ("" when it cannot be read): part of the identity of a master, so frames shot again
+    under the same names (APT restarts its numbering) do not reuse the master built from the old ones."""
+    try:
+        st = os.stat(path)
+        return f"{st.st_size}:{int(st.st_mtime)}"
+    except OSError:
+        return ""
+
+
 def unique(found):
     """The frames once each: folders given twice or nested (the session folder as lights AND as calibration)
     listed every file twice, and every light was integrated twice."""
@@ -200,7 +210,8 @@ def unique(found):
 def setup_key(f):
     """Frames that can be calibrated together share this key."""
     temp = None if f.temp is None else round(f.temp / 2) * 2   # 2 degree tolerance
-    return (f.camera, f.width, f.height, f.binning, f.gain, f.offset, temp)
+    gain = f.gain if f.gain is not None else f.iso
+    return (f.camera, f.width, f.height, f.binning, gain, f.offset, temp)
 
 
 def group(frames, keys=()):

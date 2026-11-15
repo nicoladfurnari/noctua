@@ -369,6 +369,8 @@ class CosmicSuperRes(Plugin):
             if not outs:
                 raise RuntimeError("super-resolution produced no output file")
             out = _read_any(outs[0])[..., :img.shape[-1]]
+        ctx.layers.pop("wcs", None)             # the plate solution belongs to the old size
+        ctx.layers.pop("wcs_shape", None)
         return np.clip(out, 0, 1).astype(np.float32)
 
 

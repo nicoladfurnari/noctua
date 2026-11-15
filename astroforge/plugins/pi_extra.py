@@ -200,6 +200,8 @@ class IntegerResample(Plugin):
         for k, v in list(ctx.layers.items()):     # e.g. the star layer, to be recombined later
             if isinstance(v, np.ndarray) and v.shape[:2] == img.shape[:2]:
                 ctx.layers[k] = self._one(v, f, direction, mode)
+        ctx.layers.pop("wcs", None)
+        ctx.layers.pop("wcs_shape", None)
         out = self._one(img, f, direction, mode)
         ctx.log(f"IntegerResample {'/' if direction == 'down' else 'x'}{f} ({mode}): "
                 f"{img.shape[1]}x{img.shape[0]} -> {out.shape[1]}x{out.shape[0]}")

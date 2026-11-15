@@ -99,8 +99,12 @@ def _days(a, b):
         return None
 
 
+# masters of a work folder (project.Runner._master_path): written without keywords, they are a cache of one run
+WORK_CACHE = re.compile(r"^master_(bias|dark|flat|darkflat)_[0-9a-f]{10}\.xisf$", re.I)
+
+
 def _hash(paths, depends=()):
-    ident = "|".join(sorted(str(p) for p in paths))
+    ident = "|".join(sorted(f"{p}@{frames.file_sig(p)}" for p in paths))
     if depends:
         ident += "|built-with|" + "|".join(str(d) for d in depends)
     return hashlib.sha1(ident.encode()).hexdigest()[:16]
@@ -230,6 +234,11 @@ class MasterLibrary:
                 self.entries = json.loads(self.index_path.read_text(encoding="utf-8")).get("masters", {})
             except (OSError, ValueError) as e:
                 log(f"master library: index unreadable ({e}), starting empty")
+        stale = [k for k, e in self.entries.items() if e.get("external") and WORK_CACHE.match(Path(e.get("path", "")).name)]
+        for k in stale:                 # indexed by older versions: they carry no setup and matched anything
+            self.entries.pop(k, None)
+        if stale:
+            self.save()
         for folder in extra or ():
             self.scan_external(folder)
         # calibration folders of a run: they hold raw frames too, so only files that say "master" themselves
@@ -349,7 +358,7 @@ class MasterLibrary:
         found, changed = [], False
         known = {e["path"]: e for e in self.entries.values() if e.get("external")}
         for p in sorted(it):
-            if p.suffix.lower() not in MASTER_EXT or not p.is_file():
+            if p.suffix.lower() not in MASTER_EXT or not p.is_file() or WORK_CACHE.match(p.name):
                 continue
             st = p.stat()
             sig = f"{st.st_size}:{int(st.st_mtime)}"
@@ -378,12 +387,20 @@ class MasterLibrary:
         return found
 
     def _external_entry(self, p, sig, strict=False):
+        def is_master(h):
+            imagetyp = _str(h.get("IMAGETYP", h.get("FRAME", "")))
+            return ("master" in imagetyp.lower() or "master" in p.name.lower()
+                    or (not strict and "master" in p.parent.name.lower()) or (_num(h.get("NCOMBINE")) or 0) > 1)
+        if p.suffix.lower() in (".fits", ".fit", ".fts"):
+            try:                                # the header alone tells: the pixels are read only for a master
+                if not is_master(fits.getheader(p)):
+                    return None
+            except Exception:
+                pass
         a, h = read_master(p)
         imagetyp = _str(h.get("IMAGETYP", h.get("FRAME", "")))
         ncomb = _num(h.get("NCOMBINE")) or 0
-        is_master = ("master" in imagetyp.lower() or "master" in p.name.lower()
-                     or (not strict and "master" in p.parent.name.lower()) or ncomb > 1)
-        if not is_master:
+        if not is_master(h):
             return None
         kind = _kind_of(imagetyp, p.stem)
         if kind is None:

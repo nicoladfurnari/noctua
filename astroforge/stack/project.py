@@ -201,7 +201,7 @@ class Runner:
     def _master_path(self, kind, paths, depends=()):
         """Cache file of a master: keyed on its frames AND on what it was built with (e.g. the flat's
         bias/darkflat), so adding darkflats later does not silently reuse a flat built without them."""
-        ident = "|".join(sorted(paths))
+        ident = "|".join(sorted(f"{p}@{frames.file_sig(p)}" for p in paths))
         if depends:
             ident += "|built-with|" + "|".join(str(d) for d in depends)
         h = hashlib.sha1(ident.encode()).hexdigest()[:10]
@@ -887,8 +887,11 @@ class Runner:
                 return np.nan_to_num(np.asarray(a, np.float32).mean(-1))
 
         self._step("comet", 0.0, "measuring the comet nucleus in every frame")
-        pos = comet.comet_positions(Lum(), None, s["comet_first_xy"], s["comet_last_xy"],
-                                    [lights[i].date or None for i in use])
+        times = [lights[i].date or None for i in use]
+        if any(t is None for t in times):
+            self.log("comet: some frames have no DATE-OBS, taken as equally spaced in time")
+            times = None
+        pos = comet.comet_positions(Lum(), None, s["comet_first_xy"], s["comet_last_xy"], times)
         r = use.index(ref)
         ct = comet.comet_transforms([transforms[i] for i in use], pos, r)
         self.log(f"comet moved {np.hypot(*(pos[-1] - pos[0])):.1f} px during the session")
@@ -1072,7 +1075,9 @@ class Runner:
         if not sc["light_groups"]:
             raise ValueError("no light frames found")
         base, outs, runs = dict(self.s), [], []
+        excl = set(self.s.get("exclude") or [])
         for gi, (key, fs) in enumerate(sc["light_groups"]):
+            fs = [f for f in fs if f.path not in excl]
             if len(fs) < 2:
                 self.log(f"group {gi + 1} {frames.describe_key(key)}: {len(fs)} frame, skipped")
                 continue
@@ -1085,6 +1090,8 @@ class Runner:
             outs.append(f"{rep['output']}_drizzle{dz}x.fits" if dz and dz > 1 else f"{rep['output']}_integration.fits")
             runs.append(self._run_summary(frames.describe_key(key), rep))
         self.s = base
+        if not outs:
+            raise ValueError("no light group with at least 2 usable frames")
         self.report = {"groups": outs, "runs": runs, "output": outs[0] if outs else None,
                        "combined": outs[0] if outs else None}
         return None, self.report
@@ -1169,8 +1176,14 @@ class Runner:
         # one filter may come in several exposures (Ha 300 s one night, 180 s another): each exposure is
         # its own light group with its own darks, so stack them separately and merge them afterwards
         by_filter = {}
+        excl = set(self.s.get("exclude") or [])
         for i in idx:
-            by_filter.setdefault(sc["light_groups"][i][0][8], []).append(i)
+            key, fs = sc["light_groups"][i]
+            if sum(1 for f in fs if f.path not in excl) < 2:
+                # a single test frame of another exposure: it stopped the whole job at the end, after hours
+                self.log(f"filter {key[8]} {key[7]:g} s: fewer than 2 usable frames, skipped")
+                continue
+            by_filter.setdefault(key[8], []).append(i)
         if len(by_filter) < 2:
             self.log("only one filter found: normal stacking")
             return self.run()
@@ -1181,6 +1194,7 @@ class Runner:
             for i in group_idx:
                 key, fs = sc["light_groups"][i]
                 tag = name if len(group_idx) == 1 else f"{name}_{key[7]:g}s"
+                tag = "".join(c for c in tag if c.isalnum() or c in "._+-") or "filter"      # it goes into file names
                 self.log(f"===== filter {tag} =====")
                 self.s = {**base, "light_group": i, "output": f"{base_output}_{tag}"}
                 self.report = {"started": time.strftime("%Y-%m-%d %H:%M:%S")}
@@ -1205,7 +1219,8 @@ class Runner:
             ref = parts[0][1]
             total = sum(p[2] for p in parts)
             chans[name] = sum(channels._match(a, ref) * (sec / total) for _, a, sec in parts).astype(np.float32)
-            paths[name] = str(self.work / f"{base_output}_{name}_merged.fits")
+            safe = "".join(c for c in name if c.isalnum() or c in "._+-") or "filter"
+            paths[name] = str(self.work / f"{base_output}_{safe}_merged.fits")
             io.save_fits(chans[name][..., None], paths[name])
             self.log(f"{name}: merged " + ", ".join(f"{t} ({sec / 60:.0f} min)" for t, _, sec in parts))
         rgb, used = channels.combine(chans, palette)

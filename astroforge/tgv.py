@@ -32,7 +32,7 @@ def noise_sigma(ch):
 
 def edge_weight(ch, sigma, k=3.0):
     """1 / (1 + (|grad f_s| / (k sigma))^2), f_s = f smoothed by 1 px (noise gradients ~0.4 sigma)."""
-    if k <= 0:
+    if k <= 0 or sigma <= 0:        # no noise measured (a star layer of exact zeros): 0/0 gave NaN weights
         return np.ones_like(ch)
     s = cv2.GaussianBlur(ch, (0, 0), 1.0)
     gx = cv2.Sobel(s, -1, 1, 0, ksize=3, scale=0.125)

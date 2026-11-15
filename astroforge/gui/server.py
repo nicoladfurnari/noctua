@@ -51,6 +51,14 @@ STATIC = Path(__file__).parent / "static"
 router = APIRouter()
 LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1", "[::1]"}
 LOCAL_CLIENTS = {"127.0.0.1", "::1", "localhost"}
+
+
+def _from_this_pc(request):
+    """The request comes from the PC the server runs on: loopback, or the address the server listens on (with
+    --host 192.168.1.50 the socket is not on 127.0.0.1 and this PC's browser arrives from 192.168.1.50)."""
+    h = request.client.host if request.client else ""
+    bind = (getattr(request.app.state, "launch", None) or {}).get("host")
+    return h in LOCAL_CLIENTS or (bool(bind) and bind not in ("0.0.0.0", "::") and h == bind)
 TOKEN_COOKIE = "af_token"
 TOKEN_HEADER = "X-AstroForge-Token"
 
@@ -399,7 +407,7 @@ def config_get():
 
 @router.post("/api/config")
 def config_set(request: Request, body: dict):
-    if _remote(request) and (request.client.host if request.client else "") not in LOCAL_CLIENTS:
+    if _remote(request) and not _from_this_pc(request):
         raise HTTPException(403, "i percorsi dei programmi esterni si possono cambiare solo dal PC su cui gira Noctua "
                                  "(http://127.0.0.1), non da un altro dispositivo in rete")
     cfg = pipeline.load_config()
@@ -419,7 +427,7 @@ def tools_updates(force: bool = False):
 def tools_find(request: Request):
     """Look for the external programs (known folders, PATH, installed programs, N.I.N.A.) and fill in the ones
     missing or wrong in config.json; paths that exist are kept."""
-    if _remote(request) and (request.client.host if request.client else "") not in LOCAL_CLIENTS:
+    if _remote(request) and not _from_this_pc(request):
         raise HTTPException(403, "la ricerca dei programmi si fa solo dal PC su cui gira Noctua")
     from .. import updater
     lines = []
@@ -866,24 +874,10 @@ def preset_list():
     return [pipeline.load_preset(f) | {"id": f.stem} for f in sorted(pipeline.PRESETS.glob("*.json"))]
 
 
-def _shipped_preset(f):
-    """True for a preset file tracked by git (one that comes with Noctua)."""
-    import shutil
-    import subprocess
-    if not f.exists() or shutil.which("git") is None or not (pipeline.ROOT / ".git").exists():
-        return False
-    try:
-        r = subprocess.run(["git", "ls-files", "--error-unmatch", str(f)], cwd=pipeline.ROOT, capture_output=True,
-                           timeout=15, stdin=subprocess.DEVNULL)
-    except (OSError, subprocess.SubprocessError):
-        return False
-    return r.returncode == 0
-
-
 @router.post("/api/presets/{name}")
 def preset_save(name: str, preset: dict):
     safe = "".join(c for c in name if c.isalnum() or c in "-_") or "custom"
-    if _shipped_preset(pipeline.PRESETS / f"{safe}.json"):
+    if pipeline.shipped_preset(safe):
         raise HTTPException(409, f"'{safe}' è un profilo di Noctua e non si sovrascrive (bloccherebbe gli "
                                  f"aggiornamenti): salvalo con un altro nome, per esempio {safe}_mio")
     preset["name"] = safe
@@ -1077,7 +1071,7 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 def _local_only(request, what):
-    if _remote(request) and (request.client.host if request.client else "") not in LOCAL_CLIENTS:
+    if _remote(request) and not _from_this_pc(request):
         raise HTTPException(403, f"{what} si fa solo dal PC su cui gira Noctua (http://127.0.0.1)")
 
 
@@ -1125,7 +1119,8 @@ def _need_input(body):
 
 
 # step parameters that are files read by the plugin: in network mode they obey the session folders too
-_PATH_PARAMS = {"color.channel_combine": ("R", "G", "B"), "tools.hdr_composition": ("images",)}
+_PATH_PARAMS = {"color.channel_combine": ("R", "G", "B"), "tools.hdr_composition": ("images",),
+                "color.lrgb": ("luminance",), "color.nb_rgb": ("ha", "oiii", "sii")}
 
 
 def _check_step_paths(request, steps):
@@ -1441,6 +1436,14 @@ def create_app(host="127.0.0.1", token=None):
         if request.url.path.startswith("/static/"):
             resp.headers["Cache-Control"] = "no-cache"       # always revalidated (ETag): never an old app.js
         return resp
+    @a.middleware("http")
+    async def same_origin_writes(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if request.method not in ("GET", "HEAD", "OPTIONS") and origin:
+            from urllib.parse import urlparse
+            if urlparse(origin).netloc.lower() != (request.headers.get("host") or "").lower():
+                return JSONResponse({"detail": "richiesta da un altro sito rifiutata"}, status_code=403)
+        return await call_next(request)
     remote = not is_local(host)
     a.state.remote = remote
     a.state.roots = set()
@@ -1547,8 +1550,10 @@ def open_browser_when_up(url, probe, timeout=30.0):
 def _local_host(host):
     """The address this PC reaches the server at: loopback when it listens everywhere, else the host itself
     (in brackets when IPv6)."""
-    if host in ("0.0.0.0", "::", ""):
+    if host in ("0.0.0.0", ""):
         return "127.0.0.1"
+    if host == "::":                    # IPv6 only socket: the loopback is ::1
+        return "[::1]"
     return f"[{host}]" if ":" in host and not host.startswith("[") else host
 
 

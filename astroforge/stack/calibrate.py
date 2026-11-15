@@ -568,14 +568,17 @@ def debayer(cfa, pattern, method="bilinear"):
     # clipping it at 0 would raise the background (worse with short subs or dual-band filters),
     # so shift by a pedestal first and remove it after
     pedestal = min(max(0.0, -float(cfa.min())), 0.1)
+    # (compressed into 0..1, not clipped: with one hot-pixel hole at -0.1 the clip cut every highlight of that
+    # frame at 0.9, star cores truncated at a different level in each frame)
+    gain = 1.0 + pedestal
     if method == "rcd":
-        return rcd(np.clip(cfa + pedestal, 0, 1), pattern) - pedestal
-    u16 = (np.clip(cfa + pedestal, 0, 1) * 65535 + 0.5).astype(np.uint16)
+        return rcd(np.clip((cfa + pedestal) / gain, 0, 1), pattern) * gain - pedestal
+    u16 = (np.clip((cfa + pedestal) / gain, 0, 1) * 65535 + 0.5).astype(np.uint16)
     code = _cv_code(pattern)
     if method == "ea":
         code = code + (cv2.COLOR_BayerBG2RGB_EA - cv2.COLOR_BayerBG2RGB)
     rgb = cv2.cvtColor(u16, code)
-    return rgb.astype(np.float32) / 65535.0 - pedestal
+    return rgb.astype(np.float32) * np.float32(gain / 65535.0) - np.float32(pedestal)
 
 
 def looks_like_cfa(raw, ratio=1.12):

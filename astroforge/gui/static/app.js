@@ -81,6 +81,9 @@ function go(n) {
 $$("#steps li").forEach(li => li.onclick = () => go(li.dataset.step));
 document.addEventListener("click", e => { const b = e.target.closest("[data-go]"); if (b) go(b.dataset.go); });
 
+// a key pressed while writing in a field (checkboxes, radios and sliders keep the focus after a click but take no text)
+const typing = e => !!e.target.matches?.("textarea, select, input:not([type=checkbox]):not([type=radio]):not([type=range])");
+
 // ---------------------------------------------------------------- folder browser
 let browseMode = null, browsePath = "", browseFile = null;
 async function openBrowser(mode, start) {
@@ -91,6 +94,7 @@ async function openBrowser(mode, start) {
   await loadDir(start || localStorage.getItem("af_lastdir") || "");
 }
 async function loadDir(path) {
+  browseFile = null;                    // the selection belongs to the folder shown
   let d;
   try {
     d = await api(`/api/browse?path=${encodeURIComponent(path)}${browseMode === "ref" || browseMode.endsWith(":file") ? "&images=true" : ""}`);
@@ -456,7 +460,7 @@ function openViewer(list, i, onExclude) {
     stage.addEventListener("dblclick", () => { fv.z = 1; fv.tx = fv.ty = 0; fvApply(); });
     img.addEventListener("load", () => { $(".fvstage", el).classList.remove("loading"); });
     document.addEventListener("keydown", e => {
-      if (el.hidden || e.target.closest?.("input, textarea, select")) return;
+      if (el.hidden || typing(e)) return;
       if (e.key === "Escape") el.hidden = true;
       else if (e.key === "ArrowLeft") stepViewer(-1);
       else if (e.key === "ArrowRight") stepViewer(1);
@@ -599,7 +603,7 @@ function renderScan() {
   if (scanResult.unknown && scanResult.unknown.length) cs.insertAdjacentHTML("beforeend", `<div class="calrow"><b>Non riconosciuti</b><div>
       <details><summary class="muted">${scanResult.unknown.length} file non usati (tipo non capito da header e nome)</summary>
       <ul class="paths">${scanResult.unknown.map(u => `<li><span>${esc(u)}</span></li>`).join("")}</ul></details></div></div>`);
-  if (!$("#s_work").value) $("#s_work").value = lightRoots()[0] + "\\astroforge";
+  autoWorkDir();
   if (state.mosaic) box.insertAdjacentHTML("afterbegin", `<p class="hint">Mosaico di ${state.panels.filter(p => p.length).length} pannelli:
     ogni pannello usa il proprio gruppo di light più numeroso (la scelta qui sotto non si applica). Le esclusioni sì.</p>`);
 }
@@ -610,15 +614,26 @@ $$("#s_drizzle button").forEach(b => b.onclick = () => {
   drizzle = +b.dataset.v; $$("#s_drizzle button").forEach(x => x.classList.toggle("on", x === b)); });
 $("#s_pixfrac").oninput = e => $("#pixfracV").textContent = (+e.target.value).toFixed(2);
 
+// the work folder proposed for the session: filled when the field is empty or still holds the one proposed for the
+// previous folders (it stayed on session A after switching to B: B's stack overwrote A's), never when typed by hand
+let autoWork = "";
+function autoWorkDir() {
+  const first = lightRoots()[0] || (multiMode() ? (state.sources.map(x => x.file).find(Boolean) || "").replace(/[\\/][^\\/]*$/, "") : "");
+  const el = $("#s_work");
+  if (first && (!el.value || el.value === autoWork)) { autoWork = first.replace(/[\\/]+$/, "") + "\\astroforge"; el.value = autoWork; }
+  return el.value;
+}
+// a number field left empty is its default, not 0 (reject_low 0, fwhm_sigma 0 = every frame rejected)
+const numOr = id => { const el = $(id), v = el.value; return v === "" || isNaN(+v) ? +el.defaultValue : +v; };
 function settings() {
   return {
-    lights: lightRoots(), calibration: state.calibration, work_dir: $("#s_work").value, output: "stack",
+    lights: lightRoots(), calibration: state.calibration, work_dir: autoWorkDir(), output: "stack",
     mosaic: state.mosaic ? state.panels.filter(p => p.length) : null,
     mode: multiMode() ? state.mode : "single", sources: multiMode() ? sourcesForStack() : [],
     light_group: state.groupIndex, exclude: state.exclude,
     gpu: $("#s_gpu").checked, cosmetic: $("#s_cosmetic").checked, bayer_pattern: $("#s_bayer").value || null, debayer: $("#s_debayer").value,
-    auto_reject: $("#s_autoreject").checked, fwhm_sigma: +$("#s_fwhm").value, ecc_max: +$("#s_ecc").value,
-    rejection: $("#s_rej").value, reject_low: +$("#s_low").value, reject_high: +$("#s_high").value,
+    auto_reject: $("#s_autoreject").checked, fwhm_sigma: numOr("#s_fwhm"), ecc_max: numOr("#s_ecc"),
+    rejection: $("#s_rej").value, reject_low: numOr("#s_low"), reject_high: numOr("#s_high"),
     weights: $("#s_weights").checked, drizzle, pixfrac: +$("#s_pixfrac").value,
     bayer_drizzle: $("#s_bayerdz").checked, drizzle_reject: $("#s_dzrej").checked,
     filters: $("#s_filters").checked, palette: $("#s_palette").value,
@@ -729,6 +744,7 @@ const openStackResult = res => {
   setInput(res.final_input); go(4); renderResults();
 };
 $("#startStack").onclick = async () => {
+  if (!autoWorkDir()) { alert("Indica la cartella di lavoro (Impostazioni): è dove finiscono i file dello stacking."); return; }
   go(3);
   try {
     const { job } = await api("/api/stack", settings());
@@ -747,7 +763,7 @@ async function enqueue(btn, url, body) {
   setTimeout(() => btn.textContent = label, 1800);
 }
 $("#queueStack").onclick = e => enqueue(e.currentTarget, "/api/stack", settings());
-$("#cancelJob").onclick = () => currentJob && api(`/api/jobs/${currentJob}/cancel`, {});
+$("#cancelJob").onclick = () => { const id = $("#log")._job || currentJob; if (id) api(`/api/jobs/${id}/cancel`, {}).catch(() => {}); };
 
 // ---------------------------------------------------------------- 5: results
 function renderResults() {
@@ -1017,7 +1033,7 @@ $("#bkFit").onclick = () => setZoom(0);
 $("#bkOne").onclick = () => setZoom(1);
 document.addEventListener("keydown", e => {
   if ($(".page.on")?.dataset.page !== "4" || !blinkFrames.length) return;      // blink: Risultati
-  if (e.target.closest?.("input, select, textarea") || e.ctrlKey || e.altKey || e.metaKey) return;
+  if (typing(e) || e.ctrlKey || e.altKey || e.metaKey) return;
   if (e.key === "ArrowLeft") { e.preventDefault(); stepBlink(-1); }
   else if (e.key === "ArrowRight") { e.preventDefault(); stepBlink(1); }
   else if (e.key === "+" || e.key === "=") zoomStep(1);
@@ -1246,7 +1262,9 @@ function renderSteps(open) {
     btns[1].onclick = e => { e.stopPropagation(); moveStep(i, i - 1); };
     btns[2].onclick = e => { e.stopPropagation(); moveStep(i, i + 1); };
     btns[3].onclick = e => { e.stopPropagation(); state.steps.splice(i + 1, 0, clone(s)); save(); renderSteps(i + 1); refresh(); };
-    btns[4].onclick = e => { e.stopPropagation(); state.steps.splice(i, 1); save(); renderSteps(null); refresh(); updateMask(); updateDbe(); };
+    btns[4].onclick = e => { e.stopPropagation(); state.steps.splice(i, 1);
+      if (!state.steps.length) { state.preset = EMPTY; $("#presetSel").value = EMPTY; showPresetDesc(); }
+      save(); renderSteps(null); refresh(); updateMask(); updateDbe(); };
     head.onclick = () => { renderSteps(openStep === i ? null : i); updateDbe(); updateMask(); };
     // HTML5 drag and drop: the head is the handle (sliders inside the body keep working)
     head.ondragstart = e => { dragFrom = i; li.classList.add("dragging"); e.dataTransfer.effectAllowed = "move";

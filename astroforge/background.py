@@ -125,7 +125,15 @@ def extract_rbf(img, samples=None, smoothing=0.02, size=25, n=20, correction="su
     pts = np.asarray(samples, np.float64).reshape(-1, 2) if user else samples_auto(img, n, size, reject_sigma)
     if len(pts) < 3:
         raise ValueError("background: need at least 3 samples")
+    inside = (pts[:, 0] >= 0) & (pts[:, 0] < w) & (pts[:, 1] >= 0) & (pts[:, 1] < h)
+    pts = pts[inside]
+    if len(pts) < 3:
+        raise ValueError("background: need at least 3 samples inside the image")
     vals, _, _ = _sample_values(img, pts, size)
+    ok = np.isfinite(vals).all(axis=1)
+    pts, vals = pts[ok], vals[ok]
+    if len(pts) < 3:
+        raise ValueError("background: need at least 3 samples inside the image")
     L = float(max(h, w))
     gw, gh = max(2, int(round(grid * w / L))), max(2, int(round(grid * h / L)))
     gx = ((np.arange(gw) + 0.5) * w / gw - 0.5) / L

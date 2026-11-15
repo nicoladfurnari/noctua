@@ -34,6 +34,21 @@ def _labels():
         return {}
 
 
+def shipped_preset(name):
+    """True when presets/<name>.json is a file that comes with Noctua (tracked by git). Case-insensitive like the
+    Windows file system: "Galaxy" is galaxy.json. Overwriting one leaves local changes and stops the updates."""
+    import shutil
+    import subprocess
+    if shutil.which("git") is None or not (ROOT / ".git").exists():
+        return False
+    try:
+        r = subprocess.run(["git", "ls-files", "--", f":(icase)presets/{name}.json"], cwd=ROOT, capture_output=True,
+                           text=True, timeout=15, stdin=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
 def load_preset(name_or_path):
     """By file, id or the name given in the GUI ("label", see rename_preset)."""
     p = Path(name_or_path)
@@ -146,12 +161,16 @@ def apply_step(img, step, ctx):
             return img
         layer_step = {k: v for k, v in step.items() if k != "target"}
         linear = ctx.linear                       # a stretch of the star layer alone leaves the image linear
+        mode = ctx.layers.get("stars_mode")       # "add": the layer is linear; "screen": already stretched
+        if mode in ("add", "screen"):
+            ctx.linear = mode == "add"
+        was_linear = ctx.linear
         out = apply_step(stars, layer_step, ctx)
         # plugins that know the layer (stars.stretch, stars.morph, stars.size) replace it themselves and return
         # their input: writing that back undid their work
         if ctx.layers.get("stars") is stars:
             ctx.layers["stars"] = out
-        if plugins.get(step["plugin"]).category == "stretch":
+        if was_linear and not ctx.linear:         # the step really stretched it (not a linear histogram clip):
             ctx.layers["stars_mode"] = "screen"   # stretched stars are screened, not stretched again at recombine
         ctx.linear = linear
         return img
@@ -160,7 +179,13 @@ def apply_step(img, step, ctx):
     # the mask is measured on the input, before the step changes ctx.linear (a masked stretch read the mask of
     # the linear image as if stretched: a mask of zeros, the stretch cancelled)
     m = masks.make_mask(img, spec, ctx)[..., None] if spec else None
+    layer = ctx.layers.get("stars")
     out = pl.run(img, ctx, **pl.scaled(pl.resolve(step.get("params", {})), ctx.scale))
+    new = ctx.layers.get("stars")
+    if spec and layer is not None and new is not layer and getattr(new, "shape", None) == layer.shape             and layer.shape[:2] == m.shape[:2]:
+        # the plugin replaced the star layer itself (stars.stretch / morph / size) and returned its input: the
+        # mask must blend the layer, or it was ignored
+        ctx.layers["stars"] = (layer * (1 - m) + new * m).astype(np.float32)
     if spec:
         if out.shape != img.shape:
             raise ValueError(f"{pl.id}: a mask cannot be used with a step that changes the image size")

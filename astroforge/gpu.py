@@ -132,9 +132,12 @@ def run_tasks(tasks, gpu_fn, cpu_fn=None, cpu_workers=0):
                 errors.append(e)
 
     def gpu_loop(dev):
-        cp = cupy()
-        with cp.cuda.Device(dev):
-            loop(lambda t: gpu_fn(t, dev))
+        try:
+            cp = cupy()
+            with cp.cuda.Device(dev):
+                loop(lambda t: gpu_fn(t, dev))
+        except Exception as e:      # the device itself failed (card lost, driver reset): not a silent return
+            errors.append(e)
 
     for d in devs:
         workers.append(threading.Thread(target=gpu_loop, args=(d[0],), daemon=True))
@@ -150,6 +153,8 @@ def run_tasks(tasks, gpu_fn, cpu_fn=None, cpu_workers=0):
         w.join()
     if errors:
         raise errors[0]
+    if not q.empty():               # every worker left with tasks undone: never return a half-filled result
+        raise RuntimeError(f"{q.qsize()} tasks were not run (no worker left)")
 
 
 # ------------------------------------------------------------------ helpers for the post-processing kernels

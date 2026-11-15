@@ -31,7 +31,17 @@ def load(path):
                         pass
         return data, header
     if path.suffix.lower() in (".tif", ".tiff", ".png", ".jpg", ".jpeg"):     # finished images (16-bit TIFF...)
-        data = tifffile.imread(path) if path.suffix.lower() in (".tif", ".tiff") else np.asarray(Image.open(path))
+        if path.suffix.lower() in (".tif", ".tiff"):
+            data = tifffile.imread(path)
+        else:
+            im = Image.open(path)
+            if im.mode in ("P", "PA", "CMYK", "YCbCr"):     # palette indexes are not colours
+                im = im.convert("RGB")
+            elif im.mode in ("LA", "1"):                    # grey + alpha, 1 bit
+                im = im.convert("L")
+            data = np.asarray(im)
+            if data.dtype == np.int32:                      # 16-bit grey opened in mode "I"
+                data = np.clip(data, 0, 65535).astype(np.uint16)
         if data.ndim == 3 and data.shape[0] in (1, 3, 4) and data.shape[-1] not in (1, 3, 4):
             data = np.moveaxis(data, 0, -1)                                  # planar TIFF
         if data.ndim == 3 and data.shape[-1] == 4:
@@ -131,6 +141,15 @@ def load_display(path, max_side=2400):
     path = Path(path)
     if path.suffix.lower() in (".fits", ".fit", ".fts", ".xisf"):
         a = load(path)[0]
+    elif path.suffix.lower() in (".tif", ".tiff", ".png"):
+        import cv2
+        Image.MAX_IMAGE_PIXELS = None
+        a = load(path)[0]                      # 16 bit kept (tifffile / numpy), scaled by the type's range
+        f = max_side / max(a.shape[:2])
+        if f < 1:
+            a = cv2.resize(a, (max(1, round(a.shape[1] * f)), max(1, round(a.shape[0] * f))), interpolation=cv2.INTER_AREA)
+            a = a if a.ndim == 3 else a[..., None]
+        a = np.clip(a, 0, 1)
     else:
         Image.MAX_IMAGE_PIXELS = None          # 80 MB web finals are fine here, they are reduced at once
         im = Image.open(path)

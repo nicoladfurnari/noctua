@@ -157,6 +157,9 @@ def main():
             steps = [s for s in base["steps"] if s["plugin"] != "look.match"]
             steps.append({"plugin": "look.match", "params": look.target_from(avg)})
             pid = "".join(c for c in args.save.lower().replace(" ", "_") if c.isalnum() or c in "-_")
+            if not pid or pipeline.shipped_preset(pid):
+                raise SystemExit(f"'{args.save}': nome non valido o di un profilo di Noctua (bloccherebbe gli "
+                                 f"aggiornamenti): scegline un altro, per esempio {pid or 'mio'}_mio")
             preset = {"name": pid, "label": args.save, "description": f"look di {len(looks)} immagini su base {args.base}",
                       "steps": steps}
             (pipeline.PRESETS / f"{pid}.json").write_text(json.dumps(preset, indent=2, ensure_ascii=False), encoding="utf-8")

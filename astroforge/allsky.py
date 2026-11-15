@@ -11,6 +11,7 @@ import hashlib
 import io as _io
 import json
 import math
+import http.client
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -91,7 +92,7 @@ def fetch_hips(hips, wcs_dict, timeout=120, cache_dir=None, log=print):
         raw = _download(url, timeout)
         with fits.open(_io.BytesIO(raw)) as hd:
             data = np.asarray(hd[0].data, np.float32)
-    except (urllib.error.URLError, OSError, ValueError, TypeError, TimeoutError) as e:
+    except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError, TypeError, TimeoutError) as e:
         log(f"allsky: download of {hips} failed ({type(e).__name__}: {e})")
         return None
     if data.ndim == 3:

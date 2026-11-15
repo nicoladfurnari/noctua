@@ -220,6 +220,10 @@ class SPCC(Plugin):
             return img
         exp = expected_ratios(cat["bp_rp"][ok], sensor, white_reference, filters, qe)
         k, keep, scatter = fit_scales(flux[ok], exp)
+        if not np.isfinite(k).all() or (k <= 0).any():
+            ctx.log("SPCC: the sensor / filter curves give no usable response in a channel "
+                    f"(factors {np.round(k, 3).tolist()}), image unchanged")
+            return img
         slope = fit_slopes(flux[ok][keep], exp[keep])
         bg = background_levels(img)
         kn = k / k.max()

@@ -336,8 +336,14 @@ def _reject(flat, method, low, high, iterations, esd_outliers, esd_alpha):
     elif method == "percentile":
         # PixInsight bounds (-20 % / +10 % of the median), but never narrower than the stack noise: on a dark,
         # calibrated sky (median ~0.003) the frame-to-frame noise alone is ~10 % and would be rejected
-        dev = xp.abs(flat - med)
-        sig = 1.4826 * float(xp.nanmedian(dev)) if bool(valid.any()) else 0.0
+        # noise from the differences of consecutive frames: the deviations from the median include the zero of
+        # the median sample itself (0.47 sigma with 3 frames, 0.72 with 4-5), so pure noise was rejected and the
+        # result of a 3-frame stack was 21 % noisier than the mean
+        if flat.shape[0] >= 2 and bool(valid.any()):
+            dd = xp.abs(flat[1:] - flat[:-1])
+            sig = 1.4826 * float(xp.nanmedian(dd)) / 2 ** 0.5 if bool((~xp.isnan(dd)).any()) else 0.0
+        else:
+            sig = 0.0
         lo_b = med - xp.maximum(0.2 * xp.abs(med), low * sig)
         hi_b = med + xp.maximum(0.1 * xp.abs(med), high * sig)
         klo, khi = _iterate(lambda s, cnt, lo, hi: _clip_range(s, lo, hi, lo_b, hi_b), s, cnt, 1)

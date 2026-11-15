@@ -174,8 +174,26 @@ def trail_mask(frame, reference, noise, k=3.0, min_length_px=None, width_px=None
     h, w = d.shape
     min_len = int(min_length_px or max(64, 0.08 * min(h, w)))
     # local background (gradients, clouds) and noise (nebula shot noise, reference noise) per block
-    d -= _blocks(d, 64, lambda t: np.median(t, -1))
-    loc = _blocks(d, 64, lambda t: 1.4826 * np.median(np.abs(t - np.median(t, -1, keepdims=True)), -1))
+    # (measured on the covered pixels only: the uncovered border, already 0 in d, pulled the median of the edge
+    # blocks, and a frame whose sky differs a little from the reference got a strip along its border taken for
+    # a trail; blocks with too few covered pixels take the median of the good blocks)
+    import warnings
+
+    def valid_stat(fn):
+        def stat(t):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", RuntimeWarning)
+                v = fn(t)
+            few = np.isfinite(t).mean(-1) < 0.25
+            good = v[~few & np.isfinite(v)]
+            v[few | ~np.isfinite(v)] = np.median(good) if good.size else 0.0
+            return v
+        return stat
+    dn = np.where(bad, np.nan, d)
+    d -= _blocks(dn, 64, valid_stat(lambda t: np.nanmedian(t, -1)))
+    dn = np.where(bad, np.nan, d)
+    loc = _blocks(dn, 64, valid_stat(
+        lambda t: 1.4826 * np.nanmedian(np.abs(t - np.nanmedian(t, -1, keepdims=True)), -1)))
     d /= np.maximum(loc, 1e-3 * max(float(np.median(loc)), 1e-6))
     d[_star_mask(ref, 40) | bad] = 0
     dw = d.copy()

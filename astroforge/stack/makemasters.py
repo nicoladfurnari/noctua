@@ -25,6 +25,8 @@ from pathlib import Path
 import cv2
 import numpy as np
 
+import re
+
 from . import calibrate, frames, masterlib, xisf
 
 MASTER_DEFAULTS = {
@@ -110,7 +112,7 @@ def _name(kind, f0, n, night="", exptime=None):
     if night:
         parts.append(night)
     parts.append(f"n{n}")
-    return "_".join(p.replace(" ", "") for p in parts)
+    return "_".join(re.sub(r"[^\w.+-]", "", p) for p in parts)
 
 
 def _keywords(kind, fs, master, night=""):
@@ -161,6 +163,7 @@ def make_masters(folders, out_dir, options=None, log=print, progress=None, cance
     lib = masterlib.MasterLibrary(None, (), log=log) if o["library"] else None
     report = {"out_dir": str(out), "options": o, "types": types, "masters": [], "skipped": [], "defect_maps": []}
     jobs = [(k, key, fs) for k in ("bias", "darkflat", "dark", "flat") for key, fs in groups[k].items()]
+    named = set()        # file names written in this run
     biases = {}          # setup -> (exptime, master): the shortest bias of each setup calibrates darks and flats
     darkflats = {}       # (setup, exptime) -> master
     darks = {}           # setup -> [(exptime, master)]
@@ -218,6 +221,11 @@ def make_masters(folders, out_dir, options=None, log=print, progress=None, cance
                 master = superbias(master, t["superbias_scale"])
                 log(f"bias {label}: superbias (columns + rows + large scale, sigma {t['superbias_scale']:g} px)")
             name = _name(kind, gfs[0], len(gfs), night if kind == "flat" else "", exp)
+            base, n = name, 1
+            while name in named:            # two cameras / offsets with the same exposure, temperature, gain, count
+                n += 1
+                name = f"{base}_{n}"
+            named.add(name)
             path = out / f"{name}.{'fits' if o['format'] == 'fits' else 'xisf'}"
             kw = _keywords(kind, gfs, master, night)
             _save(master, path, kw, o["format"])
