@@ -224,6 +224,35 @@ def atlas_thumb(name: str):
     return FileResponse(f, headers={"Cache-Control": "private, max-age=3600"})
 
 
+@router.get("/api/atlas/sky")
+def atlas_sky(id: str):
+    """A DSS2 colour picture of a catalogue object not photographed yet (downloaded once from CDS, then cached)."""
+    from .. import atlas
+    try:
+        f = atlas.sky_preview(id)
+    except Exception as e:
+        raise HTTPException(502, f"anteprima non scaricata ({type(e).__name__}): serve Internet")
+    if f is None:
+        raise HTTPException(404, "oggetto non in catalogo")
+    return FileResponse(f, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=86400"})
+
+
+@router.get("/api/atlas/site")
+def atlas_site_get():
+    from .. import atlas
+    return atlas.site()
+
+
+@router.post("/api/atlas/site")
+def atlas_site_set(body: dict):
+    """The observing site (name, lat, lon in degrees, east positive) the visibility of the targets is worked out for."""
+    from .. import atlas
+    try:
+        return atlas.set_site(body.get("name"), body.get("lat"), body.get("lon"))
+    except (TypeError, ValueError) as e:
+        raise HTTPException(400, f"posizione non valida: {e}")
+
+
 @router.post("/api/atlas/add")
 def atlas_add(request: Request, body: dict):
     """Register an image by hand: body = path (an integration or a finished image), name (optional: the object,

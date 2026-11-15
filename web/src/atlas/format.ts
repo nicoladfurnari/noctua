@@ -25,6 +25,8 @@ export type AtlasObject = {
   known: boolean
   xyz: [number, number, number]
   size_arcmin: number | null
+  size2_arcmin?: number | null
+  mag?: number | null
   captured: boolean
   sessions?: Session[]
   thumb?: string
@@ -36,6 +38,7 @@ export type AtlasObject = {
 export type AtlasScene = {
   objects: AtlasObject[]
   stats: { targets: number; results: number; exposure_s: number; nearest: string; farthest: string; catalogue: number }
+  site?: { name: string; lat: number; lon: number }
 }
 
 const nf = (v: number, d = 0) => v.toLocaleString("it-IT", { maximumFractionDigits: d })

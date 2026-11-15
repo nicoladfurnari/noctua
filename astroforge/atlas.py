@@ -88,7 +88,9 @@ def _describe(o, ly=None, known=True):
     return {"id": o["id"], "name": names[0], "names": names, "common": (o.get("common") or [""])[0],
             "type": o["type"], "kind": kind, "ra": o["ra"], "dec": o["dec"], "l": round(l, 3), "b": round(b, 3),
             "ly": ly, "known": known, "xyz": [round(c, 3) for c in galactic_xyz(o["ra"], o["dec"], ly)],
-            "size_arcmin": None if not np.isfinite(o.get("maj", np.nan)) else float(o["maj"])}
+            "size_arcmin": None if not np.isfinite(o.get("maj", np.nan)) else float(o["maj"]),
+            "size2_arcmin": None if not np.isfinite(o.get("min", np.nan)) else float(o["min"]),
+            "mag": None if not np.isfinite(o.get("mag", np.nan)) else float(o["mag"])}
 
 
 # ------------------------------------------------------------------ the register
@@ -168,6 +170,129 @@ def remove(key, file=None):
         return True
 
 
+# ------------------------------------------------------------------ observing site and sky previews
+SITE_DEFAULT = {"name": "Rieti, Italia", "lat": 42.404, "lon": 12.857}
+
+
+def site():
+    """Where the user observes from (the visibility of the targets is worked out for it): site.json in the atlas
+    folder, Rieti by default."""
+    try:
+        s = json.loads((folder() / "site.json").read_text(encoding="utf-8"))
+        lat, lon = float(s["lat"]), float(s["lon"])
+        if -90 <= lat <= 90 and -180 <= lon <= 180:
+            return {"name": str(s.get("name") or "")[:80], "lat": lat, "lon": lon}
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    return dict(SITE_DEFAULT)
+
+
+def set_site(name, lat, lon):
+    lat, lon = float(lat), float(lon)
+    if not (np.isfinite([lat, lon]).all() and -90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("latitudine tra -90 e 90, longitudine tra -180 e 180")
+    s = {"name": str(name or "").strip()[:80] or f"{lat:.3f}, {lon:.3f}", "lat": lat, "lon": lon}
+    (folder() / "site.json").write_text(json.dumps(s, ensure_ascii=False), encoding="utf-8")
+    return s
+
+
+SKY_HIPS = "CDS/P/DSS2/color"
+HIPS2FITS = "https://alasky.cds.unistra.fr/hips-image-services/hips2fits"     # as in allsky.py
+
+
+def sky_fov(o):
+    """Field of the preview in degrees: the object with room around it."""
+    maj = o.get("maj", np.nan)
+    return float(np.clip((maj / 60.0) * 1.8 if np.isfinite(maj) and maj > 0 else 0.5, 0.25, 8.0))
+
+
+SKYVIEW = "https://skyview.gsfc.nasa.gov/current/cgi/runquery.pl"
+
+
+def _get(url, timeout):
+    import urllib.request
+    from . import net
+    req = urllib.request.Request(url, headers={"User-Agent": "AstroForge"})
+    with net.urlopen(req, timeout=timeout) as r:
+        raw = r.read()
+    if raw[:2] != bytes([0xFF, 0xD8]):
+        raise OSError("la risposta non è un'immagine JPEG")
+    return raw
+
+
+def _sky_hips2fits(o, fov, timeout):
+    """DSS2 colour from CDS hips2fits (the main server, then its mirror)."""
+    import urllib.parse
+    q = urllib.parse.urlencode({"hips": SKY_HIPS, "width": 640, "height": 440, "fov": round(fov, 4),
+                                "projection": "TAN", "ra": o["ra"], "dec": o["dec"], "format": "jpg"})
+    err = None
+    for base in (HIPS2FITS, HIPS2FITS.replace("//alasky.", "//alaskybis.")):
+        try:
+            return _get(base + "?" + q, timeout)
+        except OSError as e:
+            err = e
+    raise err
+
+
+def _sky_skyview(o, fov, timeout):
+    """NASA SkyView fallback: DSS2 blue, red and infrared plates (one grey JPEG each) put together in colour,
+    red = DSS2 red (it holds H-alpha) lifted by the infrared, blue = DSS2 blue, green between the two."""
+    import io
+    import urllib.parse
+    from concurrent.futures import ThreadPoolExecutor
+    from PIL import Image
+
+    def plate(survey):
+        q = urllib.parse.urlencode({"Position": f"{o['ra']:.5f},{o['dec']:.5f}", "Survey": survey,
+                                    "Pixels": "640,440", "Size": f"{fov:.4f},{fov * 440 / 640:.4f}",
+                                    "Return": "JPEG", "Scaling": "Linear"})
+        return np.asarray(Image.open(io.BytesIO(_get(SKYVIEW + "?" + q, timeout))).convert("L"), np.float32) / 255
+
+    with ThreadPoolExecutor(3) as ex:
+        ir, r, b = ex.map(plate, ("DSS2 IR", "DSS2 Red", "DSS2 Blue"))
+    if r.shape != (440, 640) or float(r.std()) < 1e-3:
+        raise OSError("SkyView non ha dati per questo campo")
+
+    def level(c):
+        lo, hi = np.percentile(c, [30, 99.9])
+        return np.clip((c - lo) / max(hi - lo, 1e-3), 0, 1)
+
+    def gap(c):                                  # a strip outside the plate: black in this band only
+        return (c < 0.008) & (float(np.median(c)) > 0.03)
+
+    lr, lb, li = level(r), level(b), level(ir)
+    lr, lb, li = np.where(gap(r), lb, lr), np.where(gap(b), lr, lb), np.where(gap(ir), lr, li)
+    red = np.maximum(lr, 0.6 * li)
+    blue = lb * 0.78
+    rgb = np.clip(np.dstack([red * 1.05, 0.6 * red + 0.4 * blue, blue]), 0, 1) ** 1.25
+    buf = io.BytesIO()
+    Image.fromarray((rgb * 255).astype(np.uint8)).save(buf, "JPEG", quality=88)
+    return buf.getvalue()
+
+
+def sky_preview(oid, timeout=40):
+    """Path of a DSS2 colour picture of a catalogue object, downloaded once and kept in <atlas>/sky: CDS
+    hips2fits, or NASA SkyView when CDS does not answer. None when the object is unknown; raises OSError when
+    no service answers."""
+    o = catalogs.find(oid)
+    if o is None:
+        return None
+    d = folder() / "sky"
+    d.mkdir(exist_ok=True)
+    f = d / (hashlib.sha1(o["id"].encode()).hexdigest()[:16] + ".jpg")
+    if f.is_file() and f.stat().st_size > 0:
+        return f
+    fov = sky_fov(o)
+    try:
+        raw = _sky_hips2fits(o, fov, timeout)
+    except OSError:
+        raw = _sky_skyview(o, fov, max(timeout, 60))
+    tmp = f.with_suffix(".tmp")
+    tmp.write_bytes(raw)
+    os.replace(tmp, f)
+    return f
+
+
 # ------------------------------------------------------------------ the scene
 def scene():
     """What the 3D map draws: {objects, targets, stats}. objects: catalogue objects with a known distance
@@ -182,7 +307,8 @@ def scene():
             l, b = galactic_lb(t["ra"], t["dec"])
             d = {"id": key, "name": t["name"], "names": [t["name"]], "common": "", "type": "", "kind": "other",
                  "ra": t["ra"], "dec": t["dec"], "l": round(l, 3), "b": round(b, 3), "ly": 3e3, "known": False,
-                 "xyz": [round(c, 3) for c in galactic_xyz(t["ra"], t["dec"], 3e3)], "size_arcmin": None}
+                 "xyz": [round(c, 3) for c in galactic_xyz(t["ra"], t["dec"], 3e3)], "size_arcmin": None,
+                 "size2_arcmin": None, "mag": None}
         ss = sorted(t["sessions"], key=lambda s: s.get("when", ""))
         finals = [s for s in ss if s["kind"] == "final" and s.get("thumb")]
         best = (finals or [s for s in ss if s.get("thumb")] or [None])[-1]
@@ -207,4 +333,4 @@ def scene():
              "nearest": min(got, key=lambda o: o["ly"])["id"] if got else "",
              "farthest": max(got, key=lambda o: o["ly"])["id"] if got else "",
              "catalogue": len(objects) - len(got)}
-    return {"objects": sorted(objects.values(), key=lambda o: o["ly"]), "stats": stats}
+    return {"objects": sorted(objects.values(), key=lambda o: o["ly"]), "stats": stats, "site": site()}

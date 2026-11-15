@@ -132,3 +132,36 @@ def test_a_picture_made_elsewhere_is_placed_by_the_name_of_its_file_or_folder(tm
     r = client.post("/api/atlas/add", json={"path": str(pic)})
     assert r.status_code == 200 and r.json()["target"]["name"] == "IC 1396"
     assert r.json()["target"]["sessions"][0]["kind"] == "final"
+
+
+def test_observing_site_defaults_to_rieti_and_can_be_changed():
+    assert client.get("/api/atlas/site").json()["name"] == "Rieti, Italia"
+    assert client.get("/api/atlas").json()["site"]["lat"] == pytest.approx(42.404)
+    r = client.post("/api/atlas/site", json={"name": "Campo Imperatore", "lat": 42.44, "lon": 13.56})
+    assert r.status_code == 200 and client.get("/api/atlas/site").json()["name"] == "Campo Imperatore"
+    assert client.post("/api/atlas/site", json={"name": "x", "lat": 95, "lon": 0}).status_code == 400
+    assert client.post("/api/atlas/site", json={"lat": "nord"}).status_code == 400
+    o = next(o for o in client.get("/api/atlas").json()["objects"] if o["name"] == "M51")
+    assert o["mag"] and o["size_arcmin"] and o["size2_arcmin"]          # what the integration advice needs
+
+
+def test_sky_preview_is_downloaded_once_and_falls_back(monkeypatch):
+    calls = []
+
+    def cds(o, fov, timeout):
+        calls.append("cds")
+        raise OSError("CDS giù")
+
+    def skyview(o, fov, timeout):
+        calls.append("skyview")
+        assert 0.25 <= fov <= 8
+        return bytes([0xFF, 0xD8]) + b"jpeg"
+
+    monkeypatch.setattr(atlas, "_sky_hips2fits", cds)
+    monkeypatch.setattr(atlas, "_sky_skyview", skyview)
+    r = client.get("/api/atlas/sky", params={"id": "M 51"})
+    assert r.status_code == 200 and r.content[:2] == b"\xff\xd8" and calls == ["cds", "skyview"]
+    assert client.get("/api/atlas/sky", params={"id": "NGC 5194"}).status_code == 200 and len(calls) == 2   # cached
+    assert client.get("/api/atlas/sky", params={"id": "non esiste"}).status_code == 404
+    monkeypatch.setattr(atlas, "_sky_skyview", cds)
+    assert client.get("/api/atlas/sky", params={"id": "M 52"}).status_code == 502

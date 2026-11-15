@@ -6,7 +6,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 import { fmtExposure, fmtLy, fmtLyShort, fmtRaDec, KIND_COLOR, KIND_IT, lightLeft, type AtlasObject, type AtlasScene } from "./format"
+import { Plan, SkyPreview } from "./Plan"
 import { GALACTIC_CENTRE, photoSize, Scene, type Goal, type Layers, type View } from "./Scene"
+import { SITE_DEFAULT, type Site } from "./sky"
 
 const LAYERS: [key: keyof Layers, label: string][] = [
   ["labels", "Nomi dei tuoi bersagli"],
@@ -197,6 +199,15 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
   }, [byId, selected])
 
   const sel = selected ? byId.get(selected) ?? null : null
+  const [site, setSite] = React.useState<Site>(scene?.site ?? SITE_DEFAULT)
+  React.useEffect(() => {
+    if (scene?.site) setSite(scene.site)
+  }, [scene?.site?.lat, scene?.site?.lon, scene?.site?.name]) // eslint-disable-line react-hooks/exhaustive-deps
+  const saveSite = async (s: Site) => {
+    const r = await fetch("/api/atlas/site", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(s) })
+    if (!r.ok) throw new Error((await r.json().catch(() => null))?.detail ?? `errore ${r.status}`)
+    setSite(await r.json())
+  }
   const frame = (o: AtlasObject) => setGoal({ target: [o.xyz[0] / 2, o.xyz[1] / 2, o.xyz[2] / 2], dist: Math.max(o.ly * 1.35, 400) })
   // close enough for the photograph (or the object at its real size) to fill a good part of the view
   const approach = (o: AtlasObject) => setGoal({ target: o.xyz, dist: Math.max(photoSize(o) * 2.4, 6) })
@@ -514,6 +525,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
       {sel && (
         <div className="tw:absolute tw:top-[78px] tw:right-3 tw:z-50 tw:max-h-[calc(100%-90px)] tw:w-[300px] tw:max-w-[calc(100%-380px)] tw:mr-[52px] tw:overflow-y-auto tw:rounded-md tw:border tw:bg-background/85 tw:backdrop-blur-md">
           {sel.captured && sel.thumb && <img src={thumbUrl(sel.thumb)} alt="" className="tw:block tw:max-h-[210px] tw:w-full tw:rounded-t-md tw:object-cover" />}
+          {!sel.captured && <SkyPreview id={sel.id} />}
           <div className="tw:p-3">
             <div className="tw:flex tw:items-start tw:justify-between tw:gap-2">
               <div className="tw:min-w-0">
@@ -576,6 +588,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
                 Avvicinati
               </Btn>
             </div>
+            <Plan o={sel} site={site} onSite={saveSite} />
             {sel.captured && sel.sessions && (
               <div className="tw:mt-3 tw:border-t tw:pt-2">
                 <div className="tw:mb-1 tw:text-[10.5px] tw:tracking-[0.14em] tw:text-muted-foreground tw:uppercase">Risultati</div>

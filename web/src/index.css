@@ -154,3 +154,7 @@
     linear-gradient(#9aa6c477, #9aa6c477) top right / 18px 1px no-repeat, linear-gradient(#9aa6c477, #9aa6c477) top right / 1px 18px no-repeat,
     linear-gradient(#9aa6c477, #9aa6c477) bottom right / 18px 1px no-repeat, linear-gradient(#9aa6c477, #9aa6c477) bottom right / 1px 18px no-repeat; }
 .atlas-ring-label { background: #03050bcc; }
+
+/* atlas card: sky preview being downloaded */
+.atlas-pulse { animation: atlas-pulse 1.4s ease-in-out infinite; }
+@keyframes atlas-pulse { 50% { opacity: .35; } }
