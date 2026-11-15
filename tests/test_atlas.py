@@ -114,3 +114,21 @@ def test_a_finished_export_is_registered(tmp_path):
             break
         time.sleep(0.1)
     assert got and got[0]["name"] == "M8" and got[0]["sessions"][0]["kind"] == "final"
+
+
+def test_a_picture_made_elsewhere_is_placed_by_the_name_of_its_file_or_folder(tmp_path, monkeypatch):
+    from PIL import Image
+    monkeypatch.setattr(server.pipeline, "load_config", lambda: {"tools": {}})      # no ASTAP
+    assert server._object_from_names(tmp_path / "M31 - Andromeda.jpg") == "M 31"
+    assert server._object_from_names(tmp_path / "NGC 7000 - Nord America" / "final.tif") == "NGC 7000"
+    assert server._object_from_names(tmp_path / "ngc6888_final.jpg") == "NGC 6888"
+    assert server._object_from_names(tmp_path / "sh2-155 cave.png") == "Sh2-155"
+    assert server._object_from_names(tmp_path / "IMG_0031.jpg") == ""
+    assert server._object_from_names(tmp_path / "DSC_M5000.jpg") == ""
+    folder = tmp_path / "IC 1396 - Proboscide"
+    folder.mkdir()
+    pic = folder / "finale.jpg"
+    Image.fromarray(np.full((40, 60, 3), 90, np.uint8)).save(pic)
+    r = client.post("/api/atlas/add", json={"path": str(pic)})
+    assert r.status_code == 200 and r.json()["target"]["name"] == "IC 1396"
+    assert r.json()["target"]["sessions"][0]["kind"] == "final"

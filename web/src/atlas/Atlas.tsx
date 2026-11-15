@@ -67,8 +67,8 @@ function Tool({ on, className, ...p }: React.ComponentProps<"button"> & { on?: b
       type="button"
       {...p}
       className={cn(
-        "atlas-tool tw:flex tw:size-[34px] tw:items-center tw:justify-center tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:text-foreground tw:transition-colors tw:last:border-b-0 tw:hover:bg-accent",
-        on && "tw:bg-accent tw:text-destructive",
+        "atlas-tool tw:flex tw:size-[38px] tw:items-center tw:justify-center tw:text-foreground",
+        on && "on",
         className
       )}
     />
@@ -296,7 +296,8 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
   const farthest = got.length ? got[got.length - 1] : null
 
   return (
-    <div ref={box} className={cn("nui atlas tw:relative tw:size-full tw:overflow-hidden tw:rounded-md tw:border tw:bg-[#050505] tw:select-none", dist > 45000 && "far")}>
+    <div ref={box} className={cn("nui atlas tw:relative tw:size-full tw:overflow-hidden tw:rounded-md tw:border tw:select-none", dist > 45000 && "far")}>
+      <div className="atlas-vignette" />
       <div className="tw:absolute tw:inset-y-0 tw:right-0 tw:left-[284px]">
         {scene && (
           <Scene objects={objects} active={active} goal={goal} hovered={hovered} selected={selected} onHover={setHovered} onSelect={pick} onApproach={flyTo} onArrive={onArrive} onDistance={setDist} start={start} layers={layers} thumbUrl={thumbUrl} />
@@ -475,7 +476,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
         )}
         <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
           <ScaleSlider dist={dist} onChange={(d) => setGoal({ dist: d })} />
-        <div className="tw:flex tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-input tw:bg-background/80 tw:backdrop-blur">
+        <div className="tw:flex tw:flex-col tw:gap-1.5">
           <Tool title="Avvicina (+)" onClick={() => setGoal({ zoom: 0.5 })}>
             <Plus className="tw:size-4" />
           </Tool>

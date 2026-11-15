@@ -87,33 +87,119 @@ function MilkyWay() {
   )
 }
 
-/** Faint far stars on a sphere that follows the camera: depth at every zoom level. */
+const SKY_VERT = /* glsl */ `
+  varying vec3 vDir;
+  void main() {
+    vDir = position;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }`
+// faint clouds of colour, and from inside the galaxy the band of the Milky Way along its plane (z = 0) with dust
+const SKY_FRAG = /* glsl */ `
+  varying vec3 vDir;
+  uniform float uInside;
+  float hash(vec3 p) { p = fract(p * 0.3183099 + 0.1); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
+  float noise(vec3 x) {
+    vec3 i = floor(x), f = fract(x);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash(i), hash(i + vec3(1, 0, 0)), f.x), mix(hash(i + vec3(0, 1, 0)), hash(i + vec3(1, 1, 0)), f.x), f.y),
+               mix(mix(hash(i + vec3(0, 0, 1)), hash(i + vec3(1, 0, 1)), f.x), mix(hash(i + vec3(0, 1, 1)), hash(i + vec3(1, 1, 1)), f.x), f.y), f.z);
+  }
+  float fbm(vec3 p) { float a = 0.5, v = 0.0; for (int k = 0; k < 5; k++) { v += a * noise(p); p *= 2.03; a *= 0.5; } return v; }
+  void main() {
+    vec3 d = normalize(vDir);
+    float n = fbm(d * 2.1 + 1.7), n2 = fbm(d * 4.6 + 9.2);
+    vec3 col = vec3(0.016, 0.024, 0.052);
+    col += vec3(0.060, 0.105, 0.260) * smoothstep(0.38, 0.80, n);
+    col += vec3(0.230, 0.070, 0.190) * smoothstep(0.50, 0.88, n2) * 0.6;
+    col += vec3(0.040, 0.150, 0.150) * smoothstep(0.55, 0.90, fbm(d * 3.3 + 4.4)) * 0.5;
+    float band = exp(-pow(d.z / 0.20, 2.0));
+    float glow = band * (0.45 + 0.9 * fbm(d * 6.5 + 2.0));
+    col += uInside * glow * vec3(0.230, 0.205, 0.250);
+    col *= 1.0 - uInside * band * 0.55 * smoothstep(0.48, 0.78, fbm(d * 10.0 + 7.0));
+    gl_FragColor = vec4(col, 1.0);
+  }`
+const STAR_VERT = /* glsl */ `
+  attribute float size;
+  attribute vec3 color;
+  varying vec3 vColor;
+  uniform float uPixel;
+  void main() {
+    vColor = color;
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = size * uPixel;
+  }`
+const STAR_FRAG = /* glsl */ `
+  varying vec3 vColor;
+  void main() {
+    float r = length(gl_PointCoord - 0.5) * 2.0;
+    float a = smoothstep(1.0, 0.0, r);
+    gl_FragColor = vec4(vColor * a * a, 1.0);
+  }`
+
+/** The sky behind everything, on a sphere that follows the camera: a texture of faint coloured clouds, the glow
+ *  of the galactic plane while the camera is inside the galaxy, and stars of many brightnesses and colours
+ *  (a few bright ones with a soft halo). It gives depth at every zoom level instead of a flat black. */
 function Backdrop() {
-  const ref = React.useRef<THREE.Points>(null)
+  const group = React.useRef<THREE.Group>(null)
+  const sky = React.useMemo(
+    () => new THREE.ShaderMaterial({ vertexShader: SKY_VERT, fragmentShader: SKY_FRAG, uniforms: { uInside: { value: 1 } }, side: THREE.BackSide, depthTest: false, depthWrite: false }),
+    []
+  )
+  const stars = React.useMemo(
+    () =>
+      new THREE.ShaderMaterial({
+        vertexShader: STAR_VERT,
+        fragmentShader: STAR_FRAG,
+        uniforms: { uPixel: { value: 1 } },
+        transparent: true,
+        depthTest: false,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      }),
+    []
+  )
   const geo = React.useMemo(() => {
     const r = rng(7)
-    const N = 1800
+    const N = 7500
     const pos = new Float32Array(N * 3)
+    const col = new Float32Array(N * 3)
+    const size = new Float32Array(N)
+    const tints = [new THREE.Color("#cfe0ff"), new THREE.Color("#ffffff"), new THREE.Color("#fff1d6"), new THREE.Color("#ffd0a0"), new THREE.Color("#a9c4ff")]
     for (let i = 0; i < N; i++) {
-      const z = r() * 2 - 1
+      // denser towards the galactic plane (z = 0), as the real sky is
+      let z = r() * 2 - 1
+      if (r() < 0.55) z *= Math.abs(z)
       const th = r() * Math.PI * 2
-      const s = Math.sqrt(1 - z * z)
-      pos.set([s * Math.cos(th), s * Math.sin(th), z], i * 3)
+      const q = Math.sqrt(1 - z * z)
+      pos.set([q * Math.cos(th), q * Math.sin(th), z], i * 3)
+      const m = Math.pow(r(), 6) // most are faint, a few bright
+      const c = tints[Math.floor(r() * tints.length)]
+      const b = 0.34 + 0.66 * m
+      col.set([c.r * b, c.g * b, c.b * b], i * 3)
+      size[i] = 1.5 + 5.5 * m
     }
     const g = new THREE.BufferGeometry()
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3))
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3))
+    g.setAttribute("size", new THREE.BufferAttribute(size, 1))
     return g
   }, [])
-  useFrame(({ camera }) => {
-    if (ref.current) {
-      ref.current.position.copy(camera.position)
-      ref.current.scale.setScalar(1e4)
-    }
+  const centre = React.useMemo(() => new THREE.Vector3(...GALACTIC_CENTRE), [])
+  useFrame(({ camera, gl }) => {
+    if (!group.current) return
+    group.current.position.copy(camera.position)
+    // the band of the Milky Way is what you see from inside the disc: it fades once the camera is outside
+    const d = camera.position.distanceTo(centre)
+    sky.uniforms.uInside.value = 1 - Math.min(1, Math.max(0, (d - 45000) / 90000))
+    stars.uniforms.uPixel.value = gl.getPixelRatio()
   })
   return (
-    <points ref={ref} geometry={geo} renderOrder={-10} frustumCulled={false}>
-      <pointsMaterial size={1.1} sizeAttenuation={false} color="#7d7a72" transparent opacity={0.5} depthTest={false} depthWrite={false} />
-    </points>
+    <group ref={group} scale={1e4}>
+      <mesh renderOrder={-30} frustumCulled={false} material={sky}>
+        <sphereGeometry args={[1, 48, 32]} />
+      </mesh>
+      <points geometry={geo} renderOrder={-20} frustumCulled={false} material={stars} />
+    </group>
   )
 }
 
@@ -542,7 +628,7 @@ export function Scene(props: {
       frameloop={props.active ? "always" : "never"}
       gl={{ antialias: true, logarithmicDepthBuffer: true, powerPreference: "high-performance" }}
       camera={{ position: startPos, up: [0, 0, 1], near: 1, far: 5e12, fov: 42 }}
-      onCreated={({ gl }) => gl.setClearColor("#050505")}
+      onCreated={({ gl }) => gl.setClearColor("#03050b")}
     >
       <OrbitControls makeDefault target={props.start.target} enableDamping dampingFactor={0.09} minDistance={1} maxDistance={3e9} enableZoom={false} rotateSpeed={0.6} panSpeed={0.8} />
       <Navigator goal={props.goal} aim={aim} focus={focus} onArrive={props.onArrive} onDistance={props.onDistance} />

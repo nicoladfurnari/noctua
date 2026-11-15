@@ -152,12 +152,32 @@ def _header_object(path):
         return ""
 
 
+_OBJ_IN_NAME = re.compile(r"(?<![A-Za-z0-9])(M|NGC|IC|SH\s?2)[\s_-]*0*(\d{1,4})(?![0-9])", re.I)
+
+
+def _object_from_names(path):
+    """A catalogue object named in the file name or in the folders above it ("M31 - Andromeda.jpg",
+    "NGC 7000 - Nord America\\final.tif"): pictures made with other programs carry no OBJECT keyword, but people
+    name files and folders after the target. The nearest name wins. "" when there is none."""
+    from .. import catalogs
+    p = Path(path)
+    for text in [p.stem] + [d.name for d in list(p.parents)[:3]]:
+        for cat, num in _OBJ_IN_NAME.findall(text):
+            cat = cat.upper().replace(" ", "")
+            name = f"Sh2-{num}" if cat == "SH2" else f"{cat} {num}"
+            if catalogs.find(name):
+                return name
+    return ""
+
+
 def _atlas_add(src, file, kind, report=None, thumb_from=None, name=None, solve=True):
     """Identify the image `src` (OBJECT of the header, plate solve when ASTAP is there) and register `file`
     under that target. Returns the target, or None when the image cannot be placed in the sky."""
     from .. import atlas, catalogs
     exp, n, date = _exposure_of(report) if report else (None, None, "")
     known = name or _header_object(src)
+    if not (known and catalogs.find(known)):
+        known = _object_from_names(src) or known
     if known and catalogs.find(known):          # the header (or the user) names a catalogue object: no plate solve
         ident = {"name": known}
     elif not solve:
