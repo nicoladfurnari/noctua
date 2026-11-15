@@ -17,7 +17,8 @@ export type View = { target: [number, number, number]; dist: number }
 /** Where to fly: a new orbit centre and / or distance; zoom multiplies the current distance (+ / - buttons). */
 export type Goal = Partial<View> & { zoom?: number }
 /** What the scene draws (the "layers" menu). */
-export type Layers = { labels: boolean; routes: boolean; rings: boolean; catalogue: boolean; galaxy: boolean; photos: boolean }
+export type Layers = { labels: boolean; messier: boolean; routes: boolean; rings: boolean; catalogue: boolean; galaxy: boolean; photos: boolean }
+const MESSIER = /^M\d/
 
 // deterministic random numbers: the galaxy looks the same at every start
 function rng(seed: number) {
@@ -364,7 +365,12 @@ function Objects({ objects, layers, hovered, selected, onHover, onSelect, onAppr
     }
   }, [objects, camera, gl, size, onHover, onSelect, onApproach, layers.catalogue])
 
-  const shown = objects.filter((o) => o.captured || o.id === hovered || o.id === selected)
+  // names on the map: the targets photographed, the object under the cursor / selected, and (a layer) the Messier
+  // objects still to do, so the map reads like a chart and not like a cloud of dots (not while an object is
+  // focused: from close by, the names of far objects on the same line of sight look like neighbours)
+  const shown = objects.filter(
+    (o) => o.captured || o.id === hovered || o.id === selected || (layers.messier && layers.catalogue && !selected && MESSIER.test(o.name))
+  )
   return (
     <group>
       {layers.catalogue && (

@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Check, ChevronRight, Crosshair, Home, ImagePlus, Layers as LayersIcon, Maximize, Minus, Plus, RefreshCw, Route, Search, Trash2, X } from "lucide-react"
+import { Check, ChevronRight, CircleHelp, Crosshair, Home, ImagePlus, Layers as LayersIcon, Maximize, Minus, Plus, RefreshCw, Route, Search, Trash2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -9,7 +9,8 @@ import { fmtExposure, fmtLy, fmtLyShort, fmtRaDec, KIND_COLOR, KIND_IT, lightLef
 import { GALACTIC_CENTRE, photoSize, Scene, type Goal, type Layers, type View } from "./Scene"
 
 const LAYERS: [key: keyof Layers, label: string][] = [
-  ["labels", "Nomi"],
+  ["labels", "Nomi dei tuoi bersagli"],
+  ["messier", "Nomi dei Messier da fare"],
   ["photos", "Le tue foto"],
   ["routes", "Rotte dal Sole"],
   ["rings", "Anelli di distanza"],
@@ -86,13 +87,25 @@ export type AtlasProps = {
   onOpen?: (file: string) => void
 }
 
-const PRESETS: { label: string; hint: string; goal: Goal }[] = [
-  { label: "Vicinato", hint: "le nebulose intorno al Sole", goal: { target: [0, 0, 0], dist: 9000 } },
-  { label: "Via Lattea", hint: "tutta la galassia", goal: { target: GALACTIC_CENTRE, dist: 190000 } },
-  { label: "Gruppo Locale", hint: "Andromeda, Triangolo", goal: { target: [0, 0, 0], dist: 8.5e6 } },
-  { label: "Vergine", hint: "le galassie di Messier", goal: { target: [0, 0, 0], dist: 1.7e8 } },
-  { label: "Tutto", hint: "fino agli ammassi lontani", goal: { target: [0, 0, 0], dist: 1.4e9 } },
+const LEVELS: { label: string; realm: string; hint: string; goal: Goal }[] = [
+  { label: "Universo vicino", realm: "Universo vicino", hint: "fino agli ammassi lontani", goal: { target: [0, 0, 0], dist: 1.4e9 } },
+  { label: "Vergine", realm: "Superammasso della Vergine", hint: "le galassie di Messier", goal: { target: [0, 0, 0], dist: 1.7e8 } },
+  { label: "Gruppo Locale", realm: "Gruppo Locale", hint: "Andromeda, Triangolo", goal: { target: [0, 0, 0], dist: 8.5e6 } },
+  { label: "Via Lattea", realm: "Via Lattea", hint: "tutta la galassia", goal: { target: GALACTIC_CENTRE, dist: 190000 } },
+  { label: "Braccio di Orione", realm: "Braccio di Orione", hint: "le nebulose intorno al Sole", goal: { target: [0, 0, 0], dist: 9000 } },
+  { label: "Sole", realm: "Dintorni del Sole", hint: "i dintorni del Sole", goal: { target: [0, 0, 0], dist: 1500 } },
 ]
+const HELP: [what: string, how: string][] = [
+  ["Vai su un oggetto", "clic sull'oggetto, sull'elenco o cerca in alto"],
+  ["Ruota", "trascina"],
+  ["Zoom", "rotella (verso il cursore; si ferma sull'oggetto) · + e −"],
+  ["Sposta", "tasto destro e trascina"],
+  ["Torna al Sole", "tasto casa · H"],
+  ["Schermo intero", "F"],
+  ["Lascia l'oggetto", "Esc"],
+]
+const LAYERS_KEY = "noctua_atlas_layers"
+const LAYERS_DEFAULT: Layers = { labels: true, messier: true, routes: true, rings: true, catalogue: true, galaxy: true, photos: true }
 
 function niceScale(lyPerPx: number) {
   // a bar between 70 and 160 px long standing for 1, 2 or 5 x 10^n light years
@@ -196,8 +209,37 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [byId]
   )
-  const [layers, setLayers] = React.useState<Layers>({ labels: true, routes: true, rings: true, catalogue: true, galaxy: true, photos: true })
+  const [layers, setLayers] = React.useState<Layers>(() => {
+    try {
+      return { ...LAYERS_DEFAULT, ...JSON.parse(localStorage.getItem(LAYERS_KEY) || "{}") }
+    } catch {
+      return LAYERS_DEFAULT
+    }
+  })
+  React.useEffect(() => {
+    try {
+      localStorage.setItem(LAYERS_KEY, JSON.stringify(layers))
+    } catch {
+      /* private window: the choice lasts for this visit only */
+    }
+  }, [layers])
   const [layersOpen, setLayersOpen] = React.useState(false)
+  const [helpOpen, setHelpOpen] = React.useState(false)
+  const [find, setFind] = React.useState("")
+  const found = React.useMemo(() => {
+    const k = find.trim().toLowerCase().replace(/\s+/g, "")
+    if (!k) return []
+    const hit = (o: AtlasObject) => o.names.some((n) => n.toLowerCase().replace(/\s+/g, "").includes(k)) || o.common.toLowerCase().replace(/\s+/g, "").includes(k)
+    const exact = (o: AtlasObject) => o.names.some((n) => n.toLowerCase().replace(/\s+/g, "") === k)
+    return objects.filter(hit).sort((a, b) => Number(exact(b)) - Number(exact(a)) || Number(b.captured) - Number(a.captured) || a.ly - b.ly).slice(0, 8)
+  }, [find, objects])
+  // the address remembers the object looked at: reloading or sharing the link comes back to it
+  React.useEffect(() => {
+    if (!active || !scene) return
+    const o = selected ? byId.get(selected) : null
+    const hash = o ? "#atlante/" + encodeURIComponent(o.name) : "#atlante"
+    if (location.hash !== hash) history.replaceState(null, "", location.pathname + location.search + hash)
+  }, [active, scene, selected, byId])
   const home = React.useCallback(() => {
     setSelected(null)
     setGoal({ ...start })
@@ -332,30 +374,88 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
       </div>
 
       {/* top: where to look */}
-      <div className="tw:absolute tw:top-3 tw:left-[296px] tw:z-50 tw:flex tw:flex-wrap tw:gap-1.5">
-        {PRESETS.map((p) => (
-          <Btn key={p.label} title={p.hint} onClick={() => setGoal(p.goal)}>
-            {p.label}
-          </Btn>
-        ))}
+      <div className="tw:absolute tw:top-3 tw:left-[296px] tw:z-[60] tw:w-[min(430px,calc(100%-700px))] tw:min-w-[240px]">
+        <label className="tw:flex tw:items-center tw:gap-2 tw:rounded-md tw:border tw:border-input tw:bg-background/80 tw:px-2.5 tw:text-muted-foreground tw:backdrop-blur-md">
+          <Search className="tw:size-4 tw:shrink-0" />
+          <input
+            value={find}
+            onChange={(e) => setFind(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && found[0]) {
+                pick(found[0].id)
+                setFind("")
+              } else if (e.key === "Escape") setFind("")
+            }}
+            placeholder="Cerca un oggetto: M 31, NGC 7000, Velo…"
+            className="atlas-input tw:h-8 tw:min-w-0 tw:flex-1 tw:border-0 tw:bg-transparent tw:p-0 tw:text-[13px] tw:text-foreground tw:outline-none"
+          />
+          <span className="tw:shrink-0 tw:font-mono tw:text-[11px] tw:tabular-nums" title="oggetti sulla mappa">
+            {objects.length}
+          </span>
+        </label>
+        {found.length > 0 && (
+          <div className="tw:mt-1 tw:overflow-hidden tw:rounded-md tw:border tw:bg-background/95 tw:backdrop-blur-md">
+            {found.map((o) => (
+              <Row
+                key={o.id}
+                o={o}
+                on={false}
+                onClick={() => {
+                  pick(o.id)
+                  setFind("")
+                }}
+                thumbUrl={thumbUrl}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
-      {/* where you are: the object the view turns around */}
-      <div className="tw:absolute tw:top-[50px] tw:left-[300px] tw:z-50 tw:flex tw:items-center tw:gap-1.5 tw:font-mono tw:text-[12px] tw:text-muted-foreground">
-        <button type="button" onClick={home} title="Torna al Sole (Home)" className={cn("atlas-x tw:rounded tw:border-0 tw:bg-transparent tw:px-1 tw:py-0.5 tw:hover:text-foreground", !sel && "tw:text-foreground")}>
-          Sole
-        </button>
+      {/* where you are: the scales from the largest to the Sun, then the object the view turns around */}
+      <div className="tw:absolute tw:top-[52px] tw:right-[60px] tw:left-[298px] tw:z-50 tw:flex tw:flex-wrap tw:items-center tw:gap-x-1 tw:gap-y-0.5 tw:font-mono tw:text-[11.5px] tw:tracking-wide tw:text-muted-foreground tw:uppercase">
+        {LEVELS.map((l, i) => (
+          <React.Fragment key={l.label}>
+            {i > 0 && <ChevronRight className="tw:size-3 tw:opacity-60" />}
+            <button
+              type="button"
+              title={l.hint}
+              onClick={() => {
+                if (l.label === "Sole") setSelected(null)
+                setGoal(l.goal)
+              }}
+              className={cn(
+                "atlas-x tw:rounded tw:border-0 tw:bg-transparent tw:px-1 tw:py-0.5 tw:uppercase tw:tracking-wide tw:text-inherit tw:hover:text-foreground",
+                !sel && realmOf(dist) === l.realm && "tw:text-foreground tw:underline tw:decoration-destructive tw:decoration-2 tw:underline-offset-4"
+              )}
+            >
+              {l.label}
+            </button>
+          </React.Fragment>
+        ))}
         {sel && (
           <>
-            <ChevronRight className="tw:size-3.5" />
-            <span className="tw:text-foreground">{sel.name}</span>
-            <span>· {fmtLy(sel.ly)}</span>
+            <ChevronRight className="tw:size-3 tw:opacity-60" />
+            <span className="tw:px-1 tw:text-foreground tw:underline tw:decoration-destructive tw:decoration-2 tw:underline-offset-4">{sel.name}</span>
+            <span className="tw:normal-case">· {fmtLy(sel.ly)}</span>
           </>
         )}
       </div>
 
       {/* right: zoom, home, layers, full screen */}
       <div className="tw:absolute tw:right-3 tw:bottom-3 tw:z-50 tw:flex tw:items-end tw:gap-2">
+        {helpOpen && (
+          <div className="tw:rounded-md tw:border tw:bg-background/90 tw:px-3 tw:py-2.5 tw:backdrop-blur-md">
+            <div className="tw:mb-1.5 tw:text-[10.5px] tw:tracking-[0.14em] tw:text-muted-foreground tw:uppercase">Comandi</div>
+            <dl className="atlas-dl tw:mt-0!">
+              {HELP.map(([what, how]) => (
+                <React.Fragment key={what}>
+                  <dt>{what}</dt>
+                  <dd>{how}</dd>
+                </React.Fragment>
+              ))}
+            </dl>
+          </div>
+        )}
         {layersOpen && (
           <div className="tw:rounded-md tw:border tw:bg-background/90 tw:p-1.5 tw:backdrop-blur-md">
             {LAYERS.map(([k, label]) => (
@@ -385,11 +485,14 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
           <Tool title="Torna al Sole (Home)" onClick={home}>
             <Home className="tw:size-4" />
           </Tool>
-          <Tool title="Livelli: cosa mostrare" on={layersOpen} onClick={() => setLayersOpen((v) => !v)}>
+          <Tool title="Livelli: cosa mostrare" on={layersOpen} onClick={() => (setLayersOpen((v) => !v), setHelpOpen(false))}>
             <LayersIcon className="tw:size-4" />
           </Tool>
           <Tool title="Schermo intero (F)" onClick={fullscreen}>
             <Maximize className="tw:size-4" />
+          </Tool>
+          <Tool title="Comandi" on={helpOpen} onClick={() => (setHelpOpen((v) => !v), setLayersOpen(false))}>
+            <CircleHelp className="tw:size-4" />
           </Tool>
         </div>
         </div>
@@ -408,7 +511,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
 
       {/* right: the selected object */}
       {sel && (
-        <div className="tw:absolute tw:top-3 tw:right-3 tw:z-50 tw:max-h-[calc(100%-24px)] tw:w-[300px] tw:max-w-[calc(100%-380px)] tw:mr-[52px] tw:overflow-y-auto tw:rounded-md tw:border tw:bg-background/85 tw:backdrop-blur-md">
+        <div className="tw:absolute tw:top-[78px] tw:right-3 tw:z-50 tw:max-h-[calc(100%-90px)] tw:w-[300px] tw:max-w-[calc(100%-380px)] tw:mr-[52px] tw:overflow-y-auto tw:rounded-md tw:border tw:bg-background/85 tw:backdrop-blur-md">
           {sel.captured && sel.thumb && <img src={thumbUrl(sel.thumb)} alt="" className="tw:block tw:max-h-[210px] tw:w-full tw:rounded-t-md tw:object-cover" />}
           <div className="tw:p-3">
             <div className="tw:flex tw:items-start tw:justify-between tw:gap-2">
@@ -427,6 +530,9 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
                 {KIND_IT[sel.kind] ?? "Oggetto"}
               </Badge>
               {sel.captured ? <Badge variant="destructive">fotografato</Badge> : <Badge variant="secondary">da fare</Badge>}
+              <Badge variant="outline" className="tw:text-muted-foreground" title={sel.known ? "Valore indicativo dalla letteratura" : "Non in tabella: distanza tipica per questo tipo di oggetto"}>
+                {sel.known ? "distanza da letteratura" : "distanza stimata"}
+              </Badge>
             </div>
             <div className="tw:mt-3 tw:font-mono tw:text-[22px] tw:leading-none tw:tabular-nums">{fmtLy(sel.ly, true)}</div>
             <div className="tw:mt-1.5 tw:text-[12.5px] tw:leading-snug tw:text-muted-foreground">

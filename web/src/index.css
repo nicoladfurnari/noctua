@@ -125,3 +125,5 @@
 .nui .atlas-slider i { position: absolute; left: 11px; width: 12px; height: 1px; background: #a8a296; }
 .nui .atlas-slider b { position: absolute; left: 6px; width: 22px; height: 9px; margin-top: -4px; border-radius: 2px;
   background: #e8412f; box-shadow: 0 0 0 2px #050505; }
+
+.nui .atlas-dl dd { white-space: normal; }

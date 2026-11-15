@@ -70,6 +70,7 @@ function go(n) {
     });
     $("#atlasNav").classList.toggle("on", n === 7);
     if (atlasIsland) atlasIsland.update({ active: n === 7 });      // the 3D scene renders only while shown
+    if (n !== 7 && /^#atlante/.test(location.hash)) history.replaceState(null, "", location.pathname + location.search);
     if (n === 5) enterPost();
     if (n === 6) enterExport();
     if (n === 7) loadAtlas();
