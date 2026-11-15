@@ -6,7 +6,7 @@
 <title>Noctua</title>
 <link rel="stylesheet" href="/static/style.css">
 <link rel="stylesheet" href="/static/theme.css">
-<link rel="stylesheet" href="/static/vendor/uPlot.min.css">
+<link rel="stylesheet" href="/static/ui/noctua-ui.css">
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <link rel="icon" href="/static/icons/favicon-32.png" sizes="32x32" type="image/png">
 <link rel="apple-touch-icon" href="/static/icons/apple-touch-icon.png">
@@ -26,6 +26,7 @@
       <li data-step="5"><span class="sn">05<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Post-produzione</li>
       <li data-step="6"><span class="sn">06<svg class="ring" viewBox="0 0 46 34" aria-hidden="true"><path d="M9 23C3 15 11 5 24.5 5 36 5 42 11 40.5 18c-1.7 8-13.6 11.6-24.3 9.8-6-1-9.2-4-8.8-7.6"/></svg></span>Esporta</li>
     </ol>
+    <button class="atlasnav" id="atlasNav" data-go="7" title="I soggetti fotografati finora, nello spazio alla loro distanza"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><circle cx="12" cy="12" r="2.2"/><ellipse cx="12" cy="12" rx="10" ry="4.2" transform="rotate(-24 12 12)"/><circle cx="19.6" cy="7.2" r="1.1" fill="currentColor" stroke="none"/></svg>Atlante</button>
     <div class="side-foot">
       <div class="queue" id="queue">
         <div class="qhead">Coda lavori</div>
@@ -301,6 +302,9 @@
       </div>
     </section>
 
+    <!-- 7: atlas -->
+    <section class="page atlaspage" data-page="7"><div id="atlas" class="atlasbox"></div></section>
+
     <!-- 6 -->
     <section class="page" data-page="6">
       <h1>Esporta</h1>
@@ -401,7 +405,7 @@
     <div id="pkList" class="pkgrid"></div>
   </div>
 </div>
-<script src="/static/vendor/uPlot.iife.min.js"></script>
+<script src="/static/ui/noctua-ui.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

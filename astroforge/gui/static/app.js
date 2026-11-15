@@ -63,12 +63,16 @@ function go(n) {
   if (n === 2) setTimeout(() => showPlan(), 50);
   const apply = () => {
     $$(".page").forEach(p => p.classList.toggle("on", +p.dataset.page === n));
+    const flow = n <= 6;                                  // 7 = the atlas, outside the numbered steps
     $$("#steps li").forEach(li => {
-      li.classList.toggle("on", +li.dataset.step === n);
-      li.classList.toggle("done", +li.dataset.step < n);
+      li.classList.toggle("on", flow && +li.dataset.step === n);
+      if (flow) li.classList.toggle("done", +li.dataset.step < n);
     });
+    $("#atlasNav").classList.toggle("on", n === 7);
+    if (atlasIsland) atlasIsland.update({ active: n === 7 });      // the 3D scene renders only while shown
     if (n === 5) enterPost();
     if (n === 6) enterExport();
+    if (n === 7) loadAtlas();
     window.scrollTo(0, 0);
   };
   const cur = $(".page.on");
@@ -148,6 +152,11 @@ $("#bOk").onclick = () => {
     }
     else { if (!browsePath) return; src[what === "lights" ? "lights" : what === "calib" ? "calibration" : "masterDirs"].push(browsePath); addRoots([browsePath]); }
     save(); renderPaths(); $("#browser").hidden = true; return;
+  }
+  if (browseMode === "atlas:file") {          // an image added to the atlas by hand
+    if (!browseFile) return;
+    const f = browseFile; $("#browser").hidden = true;
+    addRoots([f]).then(() => atlasAdd(f)); return;
   }
   if (browseMode === "post") {
     if (!browseFile) return;
@@ -814,77 +823,24 @@ function renderFrames(fr) {
   drawCharts(fr); showBlink();
 }
 
-// ---------------------------------------------------------------- frame charts (uPlot, cursor shared by all)
-const CHARTS = [["fwhm", "FWHM", 2], ["eccentricity", "Eccentricità", 2], ["stars", "Stelle", 0], ["snr", "SNR", 0],
-                ["background", "Fondo", 4], ["weight", "Peso", 2]];
-const CHART_H = 72;
-const cssVar = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
-let framePlots = [], chartsRO = null;
-const plotOf = new WeakMap();
+// ---------------------------------------------------------------- frame charts and live histogram
+// React islands (shadcn/ui charts) from static/ui/noctua-ui.js, built from web/: window.NoctuaUI.<name>(el, props)
+// returns { update(props), destroy() }. This page owns the data; the islands only draw.
+const UI = window.NoctuaUI || null;
+let chartsIsland = null;
 function drawCharts(fr) {
   const box = $("#charts");
-  framePlots.forEach(u => u.destroy()); framePlots = []; box.innerHTML = "";
-  if (!fr.length || typeof uPlot === "undefined") return;
-  const x = fr.map((_, i) => i + 1), px = uPlot.pxRatio || devicePixelRatio || 1;
-  const noFile = f => f.file.replace(/\.fits?$/i, "");
-  CHARTS.forEach(([k, name, dec]) => {
-    const v = fr.map(f => Number.isFinite(+f[k]) && f[k] !== null ? +f[k] : null);
-    const nums = v.filter(a => a !== null);
-    if (!nums.length) return;                                   // report without this value (older stacks)
-    const lo = Math.min(...nums), hi = Math.max(...nums), range = `${lo.toFixed(dec)} – ${hi.toFixed(dec)}`;
-    const d = document.createElement("div"); d.className = "chart";
-    d.innerHTML = `<div class="lbl"><span>${name}</span><span class="muted cval">${range}</span></div><div class="plot"></div>`;
-    box.appendChild(d);
-    const el = $(".plot", d), val = $(".cval", d);
-    const u = new uPlot({
-      width: el.clientWidth || 300, height: CHART_H, padding: [8, 10, 4, 6], legend: { show: false },
-      cursor: { sync: { key: "frames" }, y: false, points: { show: false }, drag: { x: false, y: false } },
-      scales: { x: { time: false, range: [0.5, fr.length + 0.5] },
-                y: { range: (u, mn, mx) => mn === mx ? [mn - 1, mx + 1] : [mn - (mx - mn) * .12, mx + (mx - mn) * .12] } },
-      axes: [{ show: false }, { show: false }],
-      series: [{}, { stroke: cssVar("--muted"), width: 1, spanGaps: true, points: { show: false } }],
-      hooks: {
-        // the dots: paper = used, red = rejected, ring = the frame shown in the blink
-        draw: [u => {
-          const c = u.ctx, ok = cssVar("--text"), bad = cssVar("--bad"), sel = cssVar("--accent");
-          c.save();
-          v.forEach((y, i) => {
-            if (y === null) return;
-            const cx = u.valToPos(x[i], "x", true), cy = u.valToPos(y, "y", true);
-            c.beginPath(); c.arc(cx, cy, 2.6 * px, 0, 7); c.fillStyle = fr[i].accepted ? ok : bad; c.fill();
-            if (i === blinkAt) { c.beginPath(); c.arc(cx, cy, 4.6 * px, 0, 7); c.lineWidth = 1.8 * px; c.strokeStyle = sel; c.stroke(); }
-          });
-          c.restore();
-        }],
-        setCursor: [u => {
-          const i = u.cursor.idx;
-          val.textContent = i == null || v[i] === null ? range : `${noFile(fr[i])}: ${v[i].toFixed(dec)}${fr[i].accepted ? "" : " (scartato)"}`;
-        }],
-      },
-    }, [x, v], el);
-    u.over.style.cursor = "pointer";
-    u.over.addEventListener("click", () => { if (u.cursor.idx != null) selectFrame(u.cursor.idx, true); });
-    framePlots.push(u); plotOf.set(el, u);
-    if (!chartsRO) {        // the page may be hidden while the charts are built: size each one when it shows / resizes
-      chartsRO = new ResizeObserver(es => es.forEach(e => {
-        const p = plotOf.get(e.target), w = Math.round(e.contentRect.width);
-        if (p && w && w !== p.width) p.setSize({ width: w, height: CHART_H });
-      }));
-    }
-    chartsRO.observe(el);
-  });
-  box.insertAdjacentHTML("beforeend", `<div class="chartlegend muted"><i style="background:var(--accent2)"></i>usato<i style="background:var(--bad)"></i>scartato
-    <i style="background:var(--accent)"></i>selezionato · passa il mouse per leggere, clic per vedere il frame</div>`);
-  highlightFrame();
+  if (!UI) { box.textContent = ""; return; }
+  const props = { frames: fr, selected: blinkAt, onSelect: i => selectFrame(i, true) };
+  if (chartsIsland) chartsIsland.update(props); else chartsIsland = UI.frameCharts(box, props);
 }
 function highlightFrame() {
-  framePlots.forEach(u => u.redraw(false, false));
+  if (chartsIsland) chartsIsland.update({ selected: blinkAt });
   $$("#qTable tr[data-i]").forEach(tr => tr.classList.toggle("sel", +tr.dataset.i === blinkAt));
 }
 
-// ---------------------------------------------------------------- live histogram of the preview (uPlot)
-// computed in the browser from the preview JPEG (what is on screen, with view / before-after as shown), log scale
-let histPlot = null, histLast = null;
+// the histogram is computed here from the preview JPEG (what is on screen, with view / before-after as shown)
+let histIsland = null, histLast = null;
 const histCanvas = document.createElement("canvas");
 function histOf(img) {
   const W = Math.min(512, img.naturalWidth), H = Math.max(1, Math.round(W * img.naturalHeight / img.naturalWidth));
@@ -895,37 +851,50 @@ function histOf(img) {
   const cnt = [new Float64Array(256), new Float64Array(256), new Float64Array(256)];
   for (let i = 0; i < d.length; i += 4) { cnt[0][d[i]]++; cnt[1][d[i + 1]]++; cnt[2][d[i + 2]]++; }
   const mx = Math.max(...cnt.map(c => Math.max(...Array.from(c.subarray(1, 255)), 1)));   // clipped ends excluded from the scale
-  const lg = cnt.map(c => Array.from(c, v => Math.log1p(v) / Math.log1p(mx)));
+  const lg = cnt.map(c => Array.from(c, v => Math.min(1.04, Math.log1p(v) / Math.log1p(mx))));
   const lo = (cnt[0][0] + cnt[1][0] + cnt[2][0]) / (3 * n), hi = (cnt[0][255] + cnt[1][255] + cnt[2][255]) / (3 * n);
-  return { x: Array.from({ length: 256 }, (_, i) => i), lg, cnt, n, lo, hi };
+  return { lg, share: cnt.map(c => Array.from(c, v => v / n)), lo, hi };
 }
 function drawHist(img) {
   const box = $("#postHist"), info = $("#histInfo");
-  if (!box || !img.naturalWidth || typeof uPlot === "undefined") return;
+  if (!box || !img.naturalWidth || !UI) return;
   const h = histLast = histOf(img), pc = v => `${(100 * v).toFixed(v < 0.0005 ? 2 : 1)}%`;
-  const summary = () => `neri ${pc(h.lo)} · bianchi ${pc(h.hi)}`;
+  const summary = () => `neri ${pc(histLast.lo)} · bianchi ${pc(histLast.hi)}`;
   info.textContent = summary();
-  const data = [h.x, ...h.lg];
-  if (!histPlot) {
-    const ser = c => ({ stroke: c, width: 1, fill: c + "2e", points: { show: false } });
-    histPlot = new uPlot({
-      width: box.clientWidth || 300, height: 64, padding: [3, 0, 0, 0], legend: { show: false },
-      cursor: { y: false, points: { show: false }, drag: { x: false, y: false } },
-      scales: { x: { time: false, range: [0, 255] }, y: { range: [0, 1.04] } },
-      axes: [{ show: false }, { show: false }],
-      series: [{}, ser("#ef5a48"), ser("#6cc96f"), ser("#6a9cf2")],
-      hooks: { setCursor: [u => {
-        const i = u.cursor.idx, H = histLast; if (!H) return;
-        info.textContent = i == null ? `neri ${pc(H.lo)} · bianchi ${pc(H.hi)}` : `livello ${i}: R ${pc(H.cnt[0][i] / H.n)} · G ${pc(H.cnt[1][i] / H.n)} · B ${pc(H.cnt[2][i] / H.n)}`;
-      }] },
-    }, data, box);
-    new ResizeObserver(() => { const w = box.clientWidth; if (w && w !== histPlot.width) histPlot.setSize({ width: w, height: 64 }); }).observe(box);
-  } else histPlot.setData(data);
+  const data = { r: h.lg[0], g: h.lg[1], b: h.lg[2], pr: h.share[0], pg: h.share[1], pb: h.share[2] };
+  if (histIsland) histIsland.update({ data });
+  else histIsland = UI.histogram(box, { data, onHover: t => { info.textContent = t || summary(); } });
 }
-function selectFrame(i, scrollRow) {
-  blinkAt = i; showBlink();
-  const tr = $(`#qTable tr[data-i="${i}"]`);
-  if (scrollRow && tr) tr.scrollIntoView({ block: "nearest" });
+
+// ---------------------------------------------------------------- 7: atlas (the targets photographed, in 3D)
+let atlasIsland = null;
+async function loadAtlas() {
+  const box = $("#atlas");
+  if (!UI) { box.innerHTML = `<p class="hint">Il pacchetto dell'interfaccia (static/ui) non è stato caricato.</p>`; return; }
+  let scene = null;
+  try { scene = await api("/api/atlas"); }
+  catch (e) { box.innerHTML = `<p class="hint">Atlante non disponibile: ${esc(e.message)}</p>`; return; }
+  const props = {
+    scene, active: $(".page.on")?.dataset.page === "7", thumbUrl: n => `/api/atlas/thumb/${n}`,
+    onAdd: () => openBrowser("atlas:file"), onRefresh: loadAtlas,
+    onRemove: async (key, file) => {
+      if (!confirm("Togliere questo risultato dall'atlante? Il file resta dov'è.")) return;
+      try { await api("/api/atlas/remove", { key, file }); } catch (e) { alert(e.message); }
+      loadAtlas();
+    },
+    onOpen: file => addRoots([file]).then(() => setInput(file)).then(() => go(5)),
+  };
+  if (atlasIsland) atlasIsland.update(props); else atlasIsland = UI.atlas(box, props);
+}
+// an image added by hand: the object comes from the header or the plate solve; else the user names it
+async function atlasAdd(path, name) {
+  try { await api("/api/atlas/add", { path, name: name || "" }); loadAtlas(); }
+  catch (e) {
+    if (!name && /non riconosciuto/.test(e.message)) {
+      const n = prompt("Non riesco a riconoscere il soggetto di questa immagine (manca OBJECT nell'header e il plate solving).\nScrivi il nome dell'oggetto, per esempio M 42, NGC 7000, IC 1396:");
+      if (n) return atlasAdd(path, n);
+    } else alert(e.message);
+  }
 }
 
 // ---------------------------------------------------------------- blink
@@ -1858,7 +1827,10 @@ function fitView() {
     .reduce((a, c) => a + c.offsetHeight, 0);
   // the viewer is sticky and as tall as its content: the room is the window below its sticky top
   const vs = getComputedStyle(viewer), top = isNaN(parseFloat(vs.top)) ? viewer.getBoundingClientRect().top : parseFloat(vs.top);
-  const avail = innerHeight - top - rows - parseFloat(cs.marginTop) - parseFloat(cs.marginBottom)
+  // (when the viewer is a scroll box of fixed height, as in the current layout, the room is its own height: the
+  // window below "top" was 74 px too tall and the histogram row ended under the fold of the box)
+  const room = vs.overflowY !== "visible" && viewer.clientHeight > 0 ? viewer.clientHeight : innerHeight - top;
+  const avail = room - rows - parseFloat(cs.marginTop) - parseFloat(cs.marginBottom)
     - parseFloat(vs.paddingTop) - parseFloat(vs.paddingBottom) - 2;
   if (avail < 120) return;
   const w = Math.floor(Math.min(full, avail * img.naturalWidth / img.naturalHeight));

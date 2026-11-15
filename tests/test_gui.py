@@ -67,10 +67,11 @@ def _wait(jid, timeout=120):
 # ------------------------------------------------------------------ pages
 def test_pages_load():
     assert client.get("/").status_code == 200
-    for f in ("app.js", "style.css", "vendor/uPlot.iife.min.js", "vendor/uPlot.min.css"):
+    for f in ("app.js", "style.css", "ui/noctua-ui.js", "ui/noctua-ui.css"):
         assert client.get(f"/static/{f}").status_code == 200
     html = client.get("/").text        # the charts library is loaded before app.js, with the cache-busting ?v=
-    assert html.index("vendor/uPlot.iife.min.js?v=") < html.index("/static/app.js?v=")
+    assert html.index("ui/noctua-ui.js?v=") < html.index("/static/app.js?v=")     # the React islands load first
+    assert 'data-page="7"' in html and 'id="atlas"' in html
     assert client.get("/api/jobs").json().keys() == {"active", "history"}
 
 

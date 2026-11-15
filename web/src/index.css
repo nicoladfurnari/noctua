@@ -1,0 +1,106 @@
+/* Tailwind for the React islands only: prefixed (tw:...) and WITHOUT preflight, so nothing here can restyle the
+   plain-JS GUI around them (its own CSS is style.css + theme.css). Utilities are unlayered on purpose: a layered
+   utility loses against any unlayered rule of the GUI. */
+@import "tailwindcss/theme.css" prefix(tw);
+@import "tailwindcss/utilities.css" prefix(tw);
+
+@custom-variant dark (&:is(.nui *));
+
+/* shadcn/ui tokens mapped on the Noctua darkroom palette (theme.css): paper on black, china-marker red accent */
+.nui {
+  --background: #0e0e0d;
+  --foreground: #ece7dc;
+  --card: #161615;
+  --card-foreground: #ece7dc;
+  --popover: #1b1b19;
+  --popover-foreground: #ece7dc;
+  --primary: #ece7dc;
+  --primary-foreground: #0e0e0d;
+  --secondary: #24231f;
+  --secondary-foreground: #ece7dc;
+  --muted: #24231f;
+  --muted-foreground: #a8a296;
+  --accent: #2e2d2a;
+  --accent-foreground: #ece7dc;
+  --destructive: #e8412f;
+  --border: #2e2d2a;
+  --input: #3d3b37;
+  --ring: #ece7dc;
+  --radius: 6px;
+  --chart-1: #ece7dc;
+  --chart-2: #e8412f;
+  --chart-3: #f0a640;
+  --chart-4: #6a9cf2;
+  --chart-5: #6cc96f;
+  color: var(--foreground);
+  font-family: inherit;
+}
+.nui *, .nui *::before, .nui *::after { box-sizing: border-box; border-color: var(--border); }
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) + 2px);
+  --radius-xl: calc(var(--radius) + 6px);
+}
+
+/* ------------------------------------------------------------------ atlas (plain CSS: drawn by Html labels) */
+.nui.atlas { font-size: 13px; }
+.nui .atlas-btn, .nui .atlas-row, .nui .atlas-x, .nui .atlas-tab { font-family: inherit; cursor: pointer; margin: 0; box-shadow: none; }
+.nui .atlas-btn { line-height: 1.2; height: auto; }
+.nui .atlas-tab { border: 0; height: auto; padding: 4px 8px; color: var(--muted-foreground); background: transparent; }
+.nui .atlas-tab[data-state="active"] { background: var(--background); color: var(--foreground); }
+.nui .atlas-input { font-family: inherit; box-shadow: none; border-radius: 0; width: auto; }
+.nui .atlas-input:focus-visible { outline: none; }
+/* corner ticks of a viewfinder around the scene */
+.nui .atlas-frame { position: absolute; inset: 10px; pointer-events: none;
+  background:
+    linear-gradient(#ece7dc55, #ece7dc55) top right / 18px 1px no-repeat, linear-gradient(#ece7dc55, #ece7dc55) top right / 1px 18px no-repeat,
+    linear-gradient(#ece7dc55, #ece7dc55) bottom right / 18px 1px no-repeat, linear-gradient(#ece7dc55, #ece7dc55) bottom right / 1px 18px no-repeat; }
+.nui .atlas-scale { height: 7px; border: 1px solid #ece7dc; border-top: 0; }
+.nui .atlas-dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 12px 0 0; font-size: 12px; }
+.nui .atlas-dl dt { color: var(--muted-foreground); }
+.nui .atlas-dl dd { margin: 0; font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; text-align: right; }
+
+.atlas-ring-label { font: 10.5px ui-monospace, "Cascadia Mono", Consolas, monospace; color: #f0a640; white-space: nowrap;
+  letter-spacing: .06em; background: #050505cc; padding: 1px 5px; border-radius: 2px; transition: opacity .15s; }
+.atlas-mark { display: flex; align-items: center; gap: 6px; white-space: nowrap; transform: translateX(50%); margin-left: -4px;
+  font: 11.5px Inter, system-ui, sans-serif; color: #a8a296; text-shadow: 0 0 4px #000, 0 0 2px #000; }
+.atlas-mark i { display: block; width: 7px; height: 7px; border-radius: 50%; border: 1px solid #a8a296; flex: none; }
+.atlas-mark em { font: 10.5px ui-monospace, "Cascadia Mono", Consolas, monospace; font-style: normal; margin-left: 6px; color: #f0a640; }
+.atlas-mark.got { color: #ece7dc; font-weight: 600; }
+.atlas-mark.got i { width: 11px; height: 11px; margin: -2px; border: 2px solid #e8412f; background: #e8412f33; position: relative; }
+.atlas-mark.got i::after { content: ""; position: absolute; inset: -6px; border-radius: 50%; border: 1px solid #e8412f; opacity: 0;
+  animation: atlas-ping 2.6s ease-out infinite; }
+.atlas-mark.sel { color: #fff; }
+.atlas-mark.sel i { box-shadow: 0 0 0 3px #e8412f55; border-color: #e8412f; }
+.atlas-mark.hov { color: #ece7dc; }
+.atlas-mark.sun { color: #f0a640; font-weight: 600; }
+.atlas-mark.sun i { background: #f0a640; border-color: #f0a640; box-shadow: 0 0 10px 2px #f0a64088; }
+.atlas-mark.centre { color: #f0a640aa; }
+.atlas-mark.centre i { border-color: #f0a640aa; border-radius: 0; transform: rotate(45deg); }
+@keyframes atlas-ping { 0% { transform: scale(.5); opacity: .8; } 100% { transform: scale(2.1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .atlas-mark.got i::after { animation: none; } }

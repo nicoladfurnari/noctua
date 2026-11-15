@@ -9,7 +9,7 @@ drizzle 2x/3x, camere a colori e mono con filtri (SHO/HOO/LRGB), local normaliza
 dark optimization, rimozione satelliti, correzione distorsione, mosaici, comet stacking, dual-band OSC,
 plate solving + SPCC. Stato delle funzioni e limiti in [ROADMAP.md](ROADMAP.md).
 
-**Versione beta** (`0.6.0-beta.2`): funziona dai raw all'immagine finale ed è provata sui dati dell'autore
+**Versione beta** (`0.6.0-beta.3`): funziona dai raw all'immagine finale ed è provata sui dati dell'autore
 (QHY168C, QHY163C, QHY163M); con altre camere e programmi di acquisizione possono esserci sorprese. Le
 segnalazioni vanno nelle [Issues](https://github.com/nicoladfurnari/noctua/issues) con l'intestazione FITS di un
 frame e il log del lavoro (pagina Elaborazione).
@@ -39,6 +39,10 @@ collegato / separato / lineare, colore dalla matrice di Bayer, zoom, dati dell'h
 renderizzato a piena risoluzione.
 
 ![Post-produzione](docs/screenshots/post.jpg)
+
+## Atlante
+
+Ogni stacking e ogni export finito registra il soggetto in un atlante: una mappa 3D con il Sole al centro, la Via Lattea, gli anelli di distanza e i tuoi bersagli alla loro distanza reale, ognuno con la sua foto, il tempo integrato e l'epoca in cui è partita la luce che hai raccolto. Si naviga con il mouse (ruota, zoom, sposta), con le viste pronte (Vicinato, Via Lattea, Gruppo Locale, Vergine) e volando su un oggetto: avvicinandoti la tua immagine compare sospesa nello spazio alla scala dell'oggetto. Le immagini fatte prima si aggiungono a mano con «Aggiungi immagine».
 
 ## Avvio rapido
 
@@ -189,4 +193,6 @@ e importalo in `astroforge/plugins/__init__.py`.
 
 Catalogo deep-sky da [OpenNGC](https://github.com/mattiaverga/OpenNGC) di Mattia Verga, licenza CC-BY-SA-4.0 (vedi `astroforge/data/ATTRIBUTION.txt`); stelle brillanti dal Yale Bright Star Catalogue; Sharpless da VizieR VII/20. Curve spettrali di sensori e filtri: approssimazioni dai dati pubblicati, non dati dei costruttori.
 
-L'interfaccia include, dentro il repo e senza CDN, il font Inter (OFL), le icone Lucide (ISC) e la libreria di grafici [uPlot](https://github.com/leeoniya/uPlot) (MIT, `astroforge/gui/static/vendor`).
+L'interfaccia include, dentro il repo e senza CDN, il font Inter (OFL) e le icone Lucide (ISC). I grafici e l'atlante 3D sono isole React compilate in un solo file (`astroforge/gui/static/ui`, sorgenti in `web/`): [shadcn/ui](https://ui.shadcn.com) con Recharts per i grafici, three.js con react-three-fiber per la mappa, tutti MIT. Chi installa Noctua non ha bisogno di Node: il file compilato è nel repo.
+
+Le distanze dell'atlante (`astroforge/data/distances.csv`) sono valori indicativi di letteratura per circa 350 oggetti; la Via Lattea disegnata è uno schema, non una mappa di stelle vere.

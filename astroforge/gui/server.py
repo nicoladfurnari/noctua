@@ -104,6 +104,129 @@ class Job:
         return {**self.summary(), "log": self.log[since:], "log_len": len(self.log), "result": self.result}
 
 
+# ------------------------------------------------------------------ atlas (the targets photographed, in 3D)
+def _exposure_of(report):
+    """(seconds, frames, first night) integrated by a stacking report (single run, filters, groups, panels)."""
+    from astropy.io import fits
+    total, n, date = 0.0, 0, ""
+    for rep in [report or {}] + list((report or {}).get("runs") or []):
+        used = [f for f in rep.get("frames") or [] if f.get("accepted", True) and f.get("path")]
+        if not used:
+            continue
+        try:
+            h = fits.getheader(used[0]["path"])
+            exp = float(h.get("EXPTIME", h.get("EXPOSURE", 0)) or 0)
+            date = date or str(h.get("DATE-OBS", ""))[:10]
+        except Exception:
+            exp = 0.0
+        total, n = total + exp * len(used), n + len(used)
+    return (total or None), (n or None), date
+
+
+def _atlas_thumb(path, side=900):
+    """JPEG bytes of a result for the atlas (auto-stretched when linear), or None."""
+    try:
+        p = Path(path)
+        if p.suffix.lower() in (".jpg", ".jpeg", ".png"):
+            im = Image.open(p).convert("RGB")
+            im.thumbnail((side, side), Image.LANCZOS)
+            buf = _io.BytesIO()
+            im.save(buf, "JPEG", quality=86)
+            return buf.getvalue()
+        return _jpeg(_display(_load_small(p, side)), 86)
+    except Exception:
+        return None
+
+
+def _header_object(path):
+    """OBJECT of a FITS header without reading the pixels ("" for other formats or when missing)."""
+    if Path(path).suffix.lower() not in (".fits", ".fit", ".fts"):
+        return ""
+    try:
+        from astropy.io import fits
+        return str(fits.getheader(path).get("OBJECT", "") or "").strip()
+    except Exception:
+        return ""
+
+
+def _atlas_add(src, file, kind, report=None, thumb_from=None, name=None, solve=True):
+    """Identify the image `src` (OBJECT of the header, plate solve when ASTAP is there) and register `file`
+    under that target. Returns the target, or None when the image cannot be placed in the sky."""
+    from .. import atlas, catalogs
+    exp, n, date = _exposure_of(report) if report else (None, None, "")
+    known = name or _header_object(src)
+    if known and catalogs.find(known):          # the header (or the user) names a catalogue object: no plate solve
+        ident = {"name": known}
+    elif not solve:
+        return None
+    else:
+        ident = _identify_path(Path(src))
+    return atlas.record(name or ident.get("name") or ident.get("object") or "", ident.get("ra"), ident.get("dec"),
+                        file=file, kind=kind, exposure_s=exp, frames=n, date=date,
+                        thumb=_atlas_thumb(thumb_from or src))
+
+
+def _atlas_record(job):
+    try:
+        r = job.result or {}
+        if job.kind == "post":
+            src, file, kind = r.get("input"), (r.get("files") or [r.get("preview")])[0], "final"
+            thumb = r.get("preview")
+        else:
+            src = r.get("final_input") or r.get("combined") or r.get("mosaic") or r.get("drizzle") or r.get("integration")
+            file, kind, thumb = src, "stack", src
+        if not src or not Path(src).is_file():
+            return
+        # ASTROFORGE_ATLAS_SOLVE=0: only what the header says (the tests: no ASTAP run behind every test job)
+        t = _atlas_add(src, file, kind, r.get("report"), thumb, solve=os.environ.get("ASTROFORGE_ATLAS_SOLVE", "1") != "0")
+        job.add(f"atlante: {t['name']} registrato" if t else
+                "atlante: soggetto non riconosciuto (manca OBJECT nell'header e il plate solving): aggiungilo dalla pagina Atlante")
+    except Exception as e:                       # the atlas never fails a job
+        job.add(f"atlante: non registrato ({e})")
+
+
+@router.get("/api/atlas")
+def atlas_scene():
+    """The 3D map: catalogue objects with a known distance + the registered targets (astroforge.atlas.scene)."""
+    from .. import atlas
+    return atlas.scene()
+
+
+@router.get("/api/atlas/thumb/{name}")
+def atlas_thumb(name: str):
+    from .. import atlas
+    f = atlas.folder() / name
+    if not re.fullmatch(r"[0-9a-f]{16}\.jpg", name) or not f.is_file():
+        raise HTTPException(404)
+    return FileResponse(f, headers={"Cache-Control": "private, max-age=3600"})
+
+
+@router.post("/api/atlas/add")
+def atlas_add(request: Request, body: dict):
+    """Register an image by hand: body = path (an integration or a finished image), name (optional: the object,
+    when the header has no OBJECT and there is no plate solving)."""
+    path = str(body.get("path") or "")
+    _check_path(request, path)
+    if not Path(path).is_file():
+        raise HTTPException(404, "file non trovato")
+    final = Path(path).suffix.lower() in (".jpg", ".jpeg", ".png", ".tif", ".tiff")
+    try:
+        t = _atlas_add(path, path, "final" if final else "stack", name=str(body.get("name") or "").strip() or None)
+    except Exception as e:
+        raise HTTPException(400, f"immagine non leggibile: {str(e)[:200]}")
+    if t is None:
+        raise HTTPException(400, "soggetto non riconosciuto: scrivi il nome dell'oggetto (es. M 42, NGC 7000)")
+    return {"ok": True, "target": t}
+
+
+@router.post("/api/atlas/remove")
+def atlas_remove(body: dict):
+    from .. import atlas
+    if not atlas.remove(str(body.get("key") or ""), body.get("file") or None):
+        raise HTTPException(404, "non trovato nell'atlante")
+    return {"ok": True}
+
+
 def _finish(job):
     job.finished = time.time()
     with _QLOCK:
@@ -118,6 +241,8 @@ def _run_job(job, fn):
         fn(job)
         if job.status == "running":
             job.status = "done"
+        if job.status == "done" and job.kind in ("stack", "post"):
+            threading.Thread(target=_atlas_record, args=(job,), daemon=True).start()
     except Cancelled:
         job.status = "cancelled"
         job.add("cancelled")
@@ -293,6 +418,10 @@ def identify(request: Request, body: dict):
     p = Path(path)
     if not p.is_file():
         raise HTTPException(404, "file non trovato")
+    return _identify_path(p)
+
+
+def _identify_path(p):
     key = (str(p), p.stat().st_mtime)
     if key in _IDENTIFY:
         return _IDENTIFY[key]
@@ -1412,7 +1541,8 @@ def post(request: Request, body: dict):
         if "jpg" in fmts:
             io.save_jpeg(img, f"{base}.jpg", quality=95)
         io.save_preview(img, f"{base}_preview.jpg")
-        job.result = {"files": [f"{base}.{f}" for f in fmts], "preview": f"{base}_preview.jpg"}
+        job.result = {"files": [f"{base}.{f}" for f in fmts], "preview": f"{base}_preview.jpg",
+                      "input": body["input"]}
         job.progress = 1.0
         job.add(f"saved {base}")
     return _start(job, fn)
