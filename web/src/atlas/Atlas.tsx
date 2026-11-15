@@ -1,12 +1,78 @@
 import * as React from "react"
-import { Crosshair, ImagePlus, Locate, RefreshCw, Route, Search, Trash2, X } from "lucide-react"
+import { Check, ChevronRight, Crosshair, Home, ImagePlus, Layers as LayersIcon, Maximize, Minus, Plus, RefreshCw, Route, Search, Trash2, X } from "lucide-react"
 
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { cn } from "@/lib/utils"
 
 import { fmtExposure, fmtLy, fmtLyShort, fmtRaDec, KIND_COLOR, KIND_IT, lightLeft, type AtlasObject, type AtlasScene } from "./format"
-import { GALACTIC_CENTRE, photoSize, Scene, type Goal } from "./Scene"
+import { GALACTIC_CENTRE, photoSize, Scene, type Goal, type Layers, type View } from "./Scene"
+
+const LAYERS: [key: keyof Layers, label: string][] = [
+  ["labels", "Nomi"],
+  ["photos", "Le tue foto"],
+  ["routes", "Rotte dal Sole"],
+  ["rings", "Anelli di distanza"],
+  ["catalogue", "Oggetti del catalogo"],
+  ["galaxy", "Via Lattea e galassie"],
+]
+
+// the regions crossed while zooming out, by the distance of the camera from the point it looks at (light years)
+const REALMS: [upTo: number, name: string][] = [
+  [3e3, "Dintorni del Sole"],
+  [2.5e4, "Braccio di Orione"],
+  [4e5, "Via Lattea"],
+  [1.5e7, "Gruppo Locale"],
+  [4e8, "Superammasso della Vergine"],
+  [Infinity, "Universo vicino"],
+]
+export const realmOf = (dist: number) => REALMS.find(([up]) => dist < up)![1]
+const LOG_MIN = 1.3 // 20 light years
+const LOG_MAX = 9.3 // 2 billion
+
+/** Vertical scale, logarithmic: drag (or click) to change the distance; the ticks are where a region ends. */
+function ScaleSlider({ dist, onChange }: { dist: number; onChange: (d: number) => void }) {
+  const ref = React.useRef<HTMLDivElement>(null)
+  const pos = (d: number) => 1 - (Math.min(LOG_MAX, Math.max(LOG_MIN, Math.log10(d))) - LOG_MIN) / (LOG_MAX - LOG_MIN)
+  const at = (e: React.PointerEvent) => {
+    const r = ref.current!.getBoundingClientRect()
+    const k = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height))
+    onChange(Math.pow(10, LOG_MIN + (1 - k) * (LOG_MAX - LOG_MIN)))
+  }
+  return (
+    <div
+      ref={ref}
+      className="atlas-slider"
+      title="Scala: trascina per allontanarti o avvicinarti"
+      onPointerDown={(e) => {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        at(e)
+      }}
+      onPointerMove={(e) => {
+        if (e.buttons) at(e)
+      }}
+    >
+      {REALMS.slice(0, -1).map(([up, name]) => (
+        <i key={name} style={{ top: `${pos(up) * 100}%` }} title={name} />
+      ))}
+      <b style={{ top: `${pos(dist) * 100}%` }} />
+    </div>
+  )
+}
+
+function Tool({ on, className, ...p }: React.ComponentProps<"button"> & { on?: boolean }) {
+  return (
+    <button
+      type="button"
+      {...p}
+      className={cn(
+        "atlas-tool tw:flex tw:size-[34px] tw:items-center tw:justify-center tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:text-foreground tw:transition-colors tw:last:border-b-0 tw:hover:bg-accent",
+        on && "tw:bg-accent tw:text-destructive",
+        className
+      )}
+    />
+  )
+}
 
 export type AtlasProps = {
   scene: AtlasScene | null
@@ -50,11 +116,12 @@ function Btn({ className, ...p }: React.ComponentProps<"button">) {
   )
 }
 
-function Row({ o, on, onClick, thumbUrl }: { o: AtlasObject; on: boolean; onClick: () => void; thumbUrl: (n: string) => string }) {
+function Row({ o, on, onClick, onDouble, thumbUrl }: { o: AtlasObject; on: boolean; onClick: () => void; onDouble?: () => void; thumbUrl: (n: string) => string }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onDoubleClick={onDouble}
       className={cn(
         "atlas-row tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:text-left tw:text-foreground tw:transition-colors tw:hover:bg-accent/60",
         on && "tw:bg-accent"
@@ -98,7 +165,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
   const [height, setHeight] = React.useState(700)
 
   // the first view frames what has been photographed inside the galaxy (or the neighbourhood when empty)
-  const start = React.useMemo<Goal>(() => {
+  const start = React.useMemo<View>(() => {
     const near = got.filter((o) => o.ly < 60000)
     const far = near.length ? Math.max(...near.map((o) => o.ly)) : 3500
     return { target: [0, 0, 0], dist: Math.min(Math.max(far * 2.6, 6000), 220000) }
@@ -124,11 +191,48 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
     (id: string | null) => {
       setSelected(id)
       const o = id ? byId.get(id) : null
-      if (o) frame(o)
+      if (o) approach(o)
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [byId]
   )
+  const [layers, setLayers] = React.useState<Layers>({ labels: true, routes: true, rings: true, catalogue: true, galaxy: true, photos: true })
+  const [layersOpen, setLayersOpen] = React.useState(false)
+  const home = React.useCallback(() => {
+    setSelected(null)
+    setGoal({ ...start })
+  }, [start])
+  const fullscreen = React.useCallback(() => {
+    if (document.fullscreenElement) void document.exitFullscreen()
+    else void box.current?.requestFullscreen?.()
+  }, [])
+  // keys, while the atlas is the page shown: + / - zoom, Home or H the Sun, F full screen, Esc leaves the object
+  React.useEffect(() => {
+    if (!active) return
+    const key = (e: KeyboardEvent) => {
+      if ((e.target as HTMLElement | null)?.closest?.("input, textarea, select") || e.ctrlKey || e.altKey || e.metaKey) return
+      if (e.key === "+" || e.key === "=") setGoal({ zoom: 0.5 })
+      else if (e.key === "-" || e.key === "_") setGoal({ zoom: 2 })
+      else if (e.key === "Home" || e.key === "h" || e.key === "H") home()
+      else if (e.key === "f" || e.key === "F") fullscreen()
+      else if (e.key === "Escape" && !document.fullscreenElement) setSelected(null)
+      else return
+      e.preventDefault()
+    }
+    window.addEventListener("keydown", key)
+    return () => window.removeEventListener("keydown", key)
+  }, [active, home, fullscreen])
   const onArrive = React.useCallback(() => setGoal(null), [])
+  const flyTo = React.useCallback(
+    (id: string) => {
+      const o = byId.get(id)
+      if (!o) return
+      setSelected(id)
+      approach(o)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [byId]
+  )
   const focused = React.useRef(false)
   React.useEffect(() => {
     if (focused.current || !focus || !objects.length) return
@@ -150,10 +254,10 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
   const farthest = got.length ? got[got.length - 1] : null
 
   return (
-    <div ref={box} className="nui atlas tw:relative tw:size-full tw:overflow-hidden tw:rounded-md tw:border tw:bg-[#050505] tw:select-none">
+    <div ref={box} className={cn("nui atlas tw:relative tw:size-full tw:overflow-hidden tw:rounded-md tw:border tw:bg-[#050505] tw:select-none", dist > 45000 && "far")}>
       <div className="tw:absolute tw:inset-y-0 tw:right-0 tw:left-[284px]">
         {scene && (
-          <Scene objects={objects} active={active} goal={goal} hovered={hovered} selected={selected} onHover={setHovered} onSelect={pick} onArrive={onArrive} onDistance={setDist} start={start} thumbUrl={thumbUrl} />
+          <Scene objects={objects} active={active} goal={goal} hovered={hovered} selected={selected} onHover={setHovered} onSelect={pick} onApproach={flyTo} onArrive={onArrive} onDistance={setDist} start={start} layers={layers} thumbUrl={thumbUrl} />
         )}
       </div>
       <div className="atlas-frame" />
@@ -191,7 +295,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
           </TabsList>
           <TabsContent value="got" className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
             {got.length ? (
-              got.map((o) => <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} thumbUrl={thumbUrl} />)
+              got.map((o) => <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} onDouble={() => flyTo(o.id)} thumbUrl={thumbUrl} />)
             ) : (
               <p className="tw:m-0 tw:px-3 tw:py-4 tw:text-[12.5px] tw:leading-relaxed tw:text-muted-foreground">
                 Ancora nessun bersaglio. Al termine di uno stacking o di un export il soggetto compare qui e sulla mappa, alla sua distanza
@@ -211,7 +315,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
             </label>
             <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
               {catalogue.map((o) => (
-                <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} thumbUrl={thumbUrl} />
+                <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} onDouble={() => flyTo(o.id)} thumbUrl={thumbUrl} />
               ))}
             </div>
           </TabsContent>
@@ -234,26 +338,77 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
             {p.label}
           </Btn>
         ))}
-        <Btn title="Torna al Sole" onClick={() => setGoal({ target: [0, 0, 0], dist: Math.max(dist, 400) })}>
-          <Locate className="tw:size-3.5" />
+      </div>
+
+      {/* where you are: the object the view turns around */}
+      <div className="tw:absolute tw:top-[50px] tw:left-[300px] tw:z-50 tw:flex tw:items-center tw:gap-1.5 tw:font-mono tw:text-[12px] tw:text-muted-foreground">
+        <button type="button" onClick={home} title="Torna al Sole (Home)" className={cn("atlas-x tw:rounded tw:border-0 tw:bg-transparent tw:px-1 tw:py-0.5 tw:hover:text-foreground", !sel && "tw:text-foreground")}>
           Sole
-        </Btn>
+        </button>
+        {sel && (
+          <>
+            <ChevronRight className="tw:size-3.5" />
+            <span className="tw:text-foreground">{sel.name}</span>
+            <span>· {fmtLy(sel.ly)}</span>
+          </>
+        )}
+      </div>
+
+      {/* right: zoom, home, layers, full screen */}
+      <div className="tw:absolute tw:right-3 tw:bottom-3 tw:z-50 tw:flex tw:items-end tw:gap-2">
+        {layersOpen && (
+          <div className="tw:rounded-md tw:border tw:bg-background/90 tw:p-1.5 tw:backdrop-blur-md">
+            {LAYERS.map(([k, label]) => (
+              <button
+                key={k}
+                type="button"
+                onClick={() => setLayers((l) => ({ ...l, [k]: !l[k] }))}
+                className="atlas-x tw:flex tw:w-full tw:items-center tw:gap-2 tw:rounded tw:border-0 tw:bg-transparent tw:px-2 tw:py-1.5 tw:text-left tw:text-[12.5px] tw:text-foreground tw:hover:bg-accent"
+              >
+                <span className={cn("tw:flex tw:size-4 tw:items-center tw:justify-center tw:rounded-sm tw:border tw:border-input", layers[k] && "tw:border-destructive tw:bg-destructive")}>
+                  {layers[k] && <Check className="tw:size-3 tw:text-white" />}
+                </span>
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+        <div className="tw:flex tw:flex-col tw:items-center tw:gap-2">
+          <ScaleSlider dist={dist} onChange={(d) => setGoal({ dist: d })} />
+        <div className="tw:flex tw:flex-col tw:overflow-hidden tw:rounded-md tw:border tw:border-input tw:bg-background/80 tw:backdrop-blur">
+          <Tool title="Avvicina (+)" onClick={() => setGoal({ zoom: 0.5 })}>
+            <Plus className="tw:size-4" />
+          </Tool>
+          <Tool title="Allontana (−)" onClick={() => setGoal({ zoom: 2 })}>
+            <Minus className="tw:size-4" />
+          </Tool>
+          <Tool title="Torna al Sole (Home)" onClick={home}>
+            <Home className="tw:size-4" />
+          </Tool>
+          <Tool title="Livelli: cosa mostrare" on={layersOpen} onClick={() => setLayersOpen((v) => !v)}>
+            <LayersIcon className="tw:size-4" />
+          </Tool>
+          <Tool title="Schermo intero (F)" onClick={fullscreen}>
+            <Maximize className="tw:size-4" />
+          </Tool>
+        </div>
+        </div>
       </div>
 
       {/* bottom: scale and controls */}
-      <div className="tw:pointer-events-none tw:absolute tw:bottom-4 tw:left-[300px] tw:z-50 tw:flex tw:items-end tw:gap-5 tw:font-mono tw:text-[11.5px] tw:text-muted-foreground tw:tabular-nums" title="trascina = ruota · rotella = zoom · tasto destro = sposta">
+      <div className="tw:pointer-events-none tw:absolute tw:bottom-4 tw:left-[300px] tw:z-50 tw:flex tw:items-end tw:gap-5 tw:font-mono tw:text-[11.5px] tw:text-muted-foreground tw:tabular-nums">
         <div>
           <div className="atlas-scale" style={{ width: scale.px }} />
           <div className="tw:mt-1 tw:text-foreground">{fmtLy(scale.ly)}</div>
         </div>
         <div className="tw:pb-0.5">
-          quota {fmtLy(dist)}
+          <span className="tw:text-foreground">{realmOf(dist)}</span> · quota {fmtLy(dist)} · clic: vai all'oggetto · trascina: ruota · rotella: zoom
         </div>
       </div>
 
       {/* right: the selected object */}
       {sel && (
-        <div className="tw:absolute tw:top-14 tw:right-3 tw:z-50 tw:max-h-[calc(100%-70px)] tw:w-[300px] tw:max-w-[calc(100%-320px)] tw:overflow-y-auto tw:rounded-md tw:border tw:bg-background/85 tw:backdrop-blur-md">
+        <div className="tw:absolute tw:top-3 tw:right-3 tw:z-50 tw:max-h-[calc(100%-24px)] tw:w-[300px] tw:max-w-[calc(100%-380px)] tw:mr-[52px] tw:overflow-y-auto tw:rounded-md tw:border tw:bg-background/85 tw:backdrop-blur-md">
           {sel.captured && sel.thumb && <img src={thumbUrl(sel.thumb)} alt="" className="tw:block tw:max-h-[210px] tw:w-full tw:rounded-t-md tw:object-cover" />}
           <div className="tw:p-3">
             <div className="tw:flex tw:items-start tw:justify-between tw:gap-2">
@@ -305,7 +460,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
               )}
             </dl>
             <div className="tw:mt-3 tw:flex tw:gap-1.5">
-              <Btn className="tw:flex-1 tw:justify-center" onClick={() => frame(sel)} title="Sole e oggetto nella stessa vista">
+              <Btn className="tw:flex-1 tw:justify-center" onClick={() => frame(sel)} title="Sole e oggetto nella stessa vista: quanto è lontano da casa">
                 <Route className="tw:size-3.5" />
                 Rotta
               </Btn>

@@ -12,7 +12,12 @@ const PAPER = "#ece7dc"
 const RED = "#e8412f"
 const AMBER = "#f0a640"
 
-export type Goal = { target: [number, number, number]; dist: number }
+/** A view: the point the camera orbits and its distance from it. */
+export type View = { target: [number, number, number]; dist: number }
+/** Where to fly: a new orbit centre and / or distance; zoom multiplies the current distance (+ / - buttons). */
+export type Goal = Partial<View> & { zoom?: number }
+/** What the scene draws (the "layers" menu). */
+export type Layers = { labels: boolean; routes: boolean; rings: boolean; catalogue: boolean; galaxy: boolean; photos: boolean }
 
 // deterministic random numbers: the galaxy looks the same at every start
 function rng(seed: number) {
@@ -155,13 +160,90 @@ function ScaleRings() {
 }
 
 /** Smooth flight to a goal (target point + distance), cancelled as soon as the user grabs the view. */
-function Navigator({ goal, onArrive, onDistance }: { goal: Goal | null; onArrive: () => void; onDistance: (d: number) => void }) {
-  const { camera, controls } = useThree()
-  const g = React.useRef<Goal | null>(null)
+/** An object the wheel zooms onto: where it is and how close the camera may get (so that its picture fills the
+ *  view instead of the camera flying through it). */
+type Aim = { p: [number, number, number]; min: number }
+const aimOf = (o: AtlasObject | undefined): Aim | null => (o ? { p: o.xyz, min: photoSize(o) * 1.45 } : null)
+
+function Navigator({ goal, aim, focus, onArrive, onDistance }: {
+  goal: Goal | null
+  /** the object under the cursor, if any: the wheel zooms onto it */
+  aim: Aim | null
+  /** the selected object, if any: the wheel zooms onto it when the cursor is on nothing */
+  focus: Aim | null
+  onArrive: () => void
+  onDistance: (d: number) => void
+}) {
+  const { camera, controls, gl } = useThree()
+  const aimRef = React.useRef(aim)
+  aimRef.current = aim
+  const focusRef = React.useRef(focus)
+  focusRef.current = focus
+  // the object a zoom gesture started on stays its aim while the gesture goes on, even if the picture slides a
+  // few pixels from under the cursor (the layout moved, the hand shook): without this the view drifted away
+  const held = React.useRef<{ a: Aim; t: number; x: number; y: number } | null>(null)
+  const g = React.useRef<View | null>(null)
+  // The wheel. OrbitControls zooms 5 % per wheel event whatever its size and towards the orbit centre: reaching a
+  // target took dozens of notches and ended at the Sun, not at the target. Here a notch is ~20 %, a trackpad
+  // scrolls smoothly (the step follows the delta), and the zoom goes towards the cursor: onto the object under
+  // it when there is one (its real position, so the view converges on it), else onto the point of the view
+  // plane under the cursor.
+  React.useEffect(() => {
+    const el = gl.domElement
+    const ray = new THREE.Raycaster()
+    const p = new THREE.Vector3()
+    const ndc = new THREE.Vector2()
+    const wheel = (e: WheelEvent) => {
+      const c = controls as any
+      if (!c?.target) return
+      e.preventDefault()
+      if (g.current) {
+        g.current = null
+        onArrive()
+      }
+      const delta = Math.max(-360, Math.min(360, e.deltaY * (e.deltaMode === 1 ? 33 : e.deltaMode === 2 ? 400 : 1)))
+      const d = camera.position.distanceTo(c.target)
+      const d1 = Math.min(3e9, Math.max(1, d * Math.exp(delta * 0.0019)))
+      let s = d1 / d
+      const now = performance.now()
+      const h = held.current
+      const keep = h && now - h.t < 1200 && Math.hypot(e.clientX - h.x, e.clientY - h.y) < 80 ? h.a : null
+      const onto = aimRef.current ?? keep ?? focusRef.current
+      if (aimRef.current ?? keep) held.current = { a: (aimRef.current ?? keep)!, t: now, x: e.clientX, y: e.clientY }
+      if (onto) {
+        p.set(...onto.p)
+        const dp = camera.position.distanceTo(p)
+        if (s < 1) s = dp <= onto.min ? 1 : Math.max(s, onto.min / dp)      // arrived: the picture fills the view
+        if (s === 1) return
+      } else {
+        const r = el.getBoundingClientRect()
+        ndc.set(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1)
+        ray.setFromCamera(ndc, camera)
+        p.copy(camera.position).addScaledVector(ray.ray.direction, d)
+      }
+      // the camera moves along the line to p, the orbit centre keeps its direction at the new distance
+      const look = c.target.clone().sub(camera.position)
+      camera.position.sub(p).multiplyScalar(s).add(p)
+      c.target.copy(camera.position).addScaledVector(look, s)
+      c.update()
+    }
+    el.addEventListener("wheel", wheel, { passive: false })
+    return () => el.removeEventListener("wheel", wheel)
+  }, [camera, controls, gl, onArrive])
   const last = React.useRef(0)
   React.useEffect(() => {
-    g.current = goal
-  }, [goal])
+    const c = controls as any
+    if (!goal || !c?.target) {
+      g.current = null
+      return
+    }
+    // a goal may leave the centre or the distance as they are (zoom buttons, "home")
+    const cur = camera.position.distanceTo(c.target)
+    g.current = {
+      target: goal.target ?? (c.target.toArray() as [number, number, number]),
+      dist: Math.min(3e9, Math.max(1, goal.dist ?? cur * (goal.zoom ?? 1))),
+    }
+  }, [goal, controls, camera])
   React.useEffect(() => {
     const c = controls as any
     if (!c?.addEventListener) return
@@ -203,12 +285,15 @@ function Navigator({ goal, onArrive, onDistance }: { goal: Goal | null; onArrive
 
 /** Catalogue objects as dots; hover and click are resolved in screen space (a ray against points of every
  *  size, from 400 to 500 million light years away, would need a threshold per zoom level). */
-function Objects({ objects, hovered, selected, onHover, onSelect }: {
+function Objects({ objects, layers, hovered, selected, onHover, onSelect, onApproach, thumbUrl }: {
   objects: AtlasObject[]
+  layers: Layers
   hovered: string | null
   selected: string | null
   onHover: (id: string | null) => void
   onSelect: (id: string | null) => void
+  onApproach: (id: string) => void
+  thumbUrl: (n: string) => string
 }) {
   const { camera, gl, size } = useThree()
   const dim = React.useMemo(() => objects.filter((o) => !o.captured), [objects])
@@ -237,6 +322,7 @@ function Objects({ objects, hovered, selected, onHover, onSelect }: {
       let best: string | null = null
       let bd = 14 * 14
       for (const o of objects) {
+        if (!o.captured && !layers.catalogue) continue
         v.set(...o.xyz).project(camera)
         if (v.z > 1 || v.z < -1) continue
         const dx = (v.x * 0.5 + 0.5) * size.width - mx
@@ -260,33 +346,41 @@ function Objects({ objects, hovered, selected, onHover, onSelect }: {
       down = null
     }
     const leave = () => onHover(null)
+    const dbl = (e: MouseEvent) => {
+      const id = nearest(e as PointerEvent)
+      if (id) onApproach(id)
+    }
+    el.addEventListener("dblclick", dbl)
     el.addEventListener("pointermove", move)
     el.addEventListener("pointerdown", dn)
     el.addEventListener("pointerup", up)
     el.addEventListener("pointerleave", leave)
     return () => {
+      el.removeEventListener("dblclick", dbl)
       el.removeEventListener("pointermove", move)
       el.removeEventListener("pointerdown", dn)
       el.removeEventListener("pointerup", up)
       el.removeEventListener("pointerleave", leave)
     }
-  }, [objects, camera, gl, size, onHover, onSelect])
+  }, [objects, camera, gl, size, onHover, onSelect, onApproach, layers.catalogue])
 
   const shown = objects.filter((o) => o.captured || o.id === hovered || o.id === selected)
   return (
     <group>
-      <points geometry={geo} frustumCulled={false}>
-        <pointsMaterial size={3.2} sizeAttenuation={false} vertexColors transparent opacity={0.9} depthWrite={false} />
-      </points>
+      {layers.catalogue && (
+        <points geometry={geo} frustumCulled={false}>
+          <pointsMaterial size={3.2} sizeAttenuation={false} vertexColors transparent opacity={0.9} depthWrite={false} />
+        </points>
+      )}
       {objects
-        .filter((o) => o.captured)
+        .filter((o) => o.captured && (layers.routes || o.id === selected))
         .map((o) => (
           <Line key={"l" + o.id} points={[[0, 0, 0], o.xyz]} color={RED} lineWidth={o.id === selected ? 1.6 : 0.8} transparent opacity={o.id === selected ? 0.9 : 0.32} depthWrite={false} />
         ))}
       {shown.map((o) => (
         <Html key={o.id} position={o.xyz} center zIndexRange={[o.id === selected ? 40 : o.captured ? 30 : 20, 0]} style={{ pointerEvents: "none" }}>
-          <div className={"atlas-mark" + (o.captured ? " got" : "") + (o.id === selected ? " sel" : "") + (o.id === hovered ? " hov" : "")}>
-            <i />
+          <div className={"atlas-mark" + (o.captured ? " got" : "") + (o.captured && o.thumb ? " pic" : "") + (o.id === selected ? " sel" : "") + (o.id === hovered ? " hov" : "") + (layers.labels ? "" : " nolabel")}>
+            {o.captured && o.thumb ? <img src={thumbUrl(o.thumb)} alt="" draggable={false} /> : <i />}
             <span>
               {o.name}
               {(o.id === hovered || o.id === selected) && <em>{fmtLy(o.ly)}</em>}
@@ -386,7 +480,10 @@ function Photos({ objects, thumbUrl }: { objects: AtlasObject[]; thumbUrl: (n: s
     </group>
   )
 }
-export const photoSize = (o: AtlasObject) => sizeLy(o) * (o.kind === "galaxy" ? 1.5 : 2)
+// Height of the photograph in light years. The catalogue sizes are uneven (IC 1396 is listed 14', it spans 3
+// degrees; NGC 6357 4'), so pictures were large for some targets and invisible specks for others: every picture is
+// at least the field of a typical frame (1.3 degrees at the object's distance), larger when the object is.
+export const photoSize = (o: AtlasObject) => Math.max(sizeLy(o) * (o.kind === "galaxy" ? 1.5 : 2), o.ly * 0.023)
 
 function Landmarks() {
   return (
@@ -419,11 +516,15 @@ export function Scene(props: {
   selected: string | null
   onHover: (id: string | null) => void
   onSelect: (id: string | null) => void
+  onApproach: (id: string) => void
   onArrive: () => void
   onDistance: (d: number) => void
-  start: Goal
+  start: View
+  layers: Layers
   thumbUrl: (n: string) => string
 }) {
+  const aim = React.useMemo(() => aimOf(props.objects.find((o) => o.id === props.hovered)), [props.objects, props.hovered])
+  const focus = React.useMemo(() => aimOf(props.objects.find((o) => o.id === props.selected)), [props.objects, props.selected])
   const startPos = React.useMemo(() => {
     const d = props.start.dist
     const [tx, ty, tz] = props.start.target
@@ -437,15 +538,15 @@ export function Scene(props: {
       camera={{ position: startPos, up: [0, 0, 1], near: 1, far: 5e12, fov: 42 }}
       onCreated={({ gl }) => gl.setClearColor("#050505")}
     >
-      <OrbitControls makeDefault target={props.start.target} enableDamping dampingFactor={0.09} minDistance={2} maxDistance={3e9} zoomSpeed={1.5} rotateSpeed={0.6} panSpeed={0.8} />
-      <Navigator goal={props.goal} onArrive={props.onArrive} onDistance={props.onDistance} />
+      <OrbitControls makeDefault target={props.start.target} enableDamping dampingFactor={0.09} minDistance={1} maxDistance={3e9} enableZoom={false} rotateSpeed={0.6} panSpeed={0.8} />
+      <Navigator goal={props.goal} aim={aim} focus={focus} onArrive={props.onArrive} onDistance={props.onDistance} />
       <Backdrop />
-      <MilkyWay />
-      <ScaleRings />
+      {props.layers.galaxy && <MilkyWay />}
+      {props.layers.rings && <ScaleRings />}
       <Landmarks />
-      <Galaxies objects={props.objects} />
-      <Photos objects={props.objects} thumbUrl={props.thumbUrl} />
-      <Objects objects={props.objects} hovered={props.hovered} selected={props.selected} onHover={props.onHover} onSelect={props.onSelect} />
+      {props.layers.galaxy && <Galaxies objects={props.objects} />}
+      {props.layers.photos && <Photos objects={props.objects} thumbUrl={props.thumbUrl} />}
+      <Objects objects={props.objects} layers={props.layers} hovered={props.hovered} selected={props.selected} onHover={props.onHover} onSelect={props.onSelect} onApproach={props.onApproach} thumbUrl={props.thumbUrl} />
     </Canvas>
   )
 }

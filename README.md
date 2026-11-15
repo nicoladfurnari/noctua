@@ -42,7 +42,7 @@ renderizzato a piena risoluzione.
 
 ## Atlante
 
-Ogni stacking e ogni export finito registra il soggetto in un atlante: una mappa 3D con il Sole al centro, la Via Lattea, gli anelli di distanza e i tuoi bersagli alla loro distanza reale, ognuno con la sua foto, il tempo integrato e l'epoca in cui è partita la luce che hai raccolto. Si naviga con il mouse (ruota, zoom, sposta), con le viste pronte (Vicinato, Via Lattea, Gruppo Locale, Vergine) e volando su un oggetto: avvicinandoti la tua immagine compare sospesa nello spazio alla scala dell'oggetto. Le immagini fatte prima si aggiungono a mano con «Aggiungi immagine». L'indirizzo `http://127.0.0.1:8765/#atlante` apre direttamente la mappa, `#atlante/M42` vola su un oggetto.
+Ogni stacking e ogni export finito registra il soggetto in un atlante: una mappa 3D con il Sole al centro, la Via Lattea, gli anelli di distanza e i tuoi bersagli alla loro distanza reale, ognuno con la sua foto, il tempo integrato e l'epoca in cui è partita la luce che hai raccolto. Si naviga come in un planetario 3D: un clic su un oggetto lo mette al centro e la vista ci vola sopra, la rotella zooma verso il cursore (e si ferma sull'oggetto, con la tua immagine sospesa nello spazio che riempie lo schermo), una scala verticale attraversa le regioni dal vicinato del Sole all'universo vicino. A lato ci sono zoom, ritorno al Sole, livelli da accendere e spegnere e schermo intero; in alto le viste pronte (Vicinato, Via Lattea, Gruppo Locale, Vergine). Le immagini fatte prima si aggiungono a mano con «Aggiungi immagine». L'indirizzo `http://127.0.0.1:8765/#atlante` apre direttamente la mappa, `#atlante/M42` vola su un oggetto.
 
 ![Atlante: i soggetti fotografati intorno al Sole](docs/screenshots/atlante.png)
 

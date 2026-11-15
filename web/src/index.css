@@ -104,3 +104,24 @@
 .atlas-mark.centre i { border-color: #f0a640aa; border-radius: 0; transform: rotate(45deg); }
 @keyframes atlas-ping { 0% { transform: scale(.5); opacity: .8; } 100% { transform: scale(2.1); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .atlas-mark.got i::after { animation: none; } }
+
+/* a photographed target shows its own picture on the marker, at every zoom */
+.atlas-mark.pic { margin-left: -15px; gap: 8px; }
+.atlas-mark.pic img { display: block; width: 26px; height: 26px; flex: none; border-radius: 50%; object-fit: cover;
+  border: 2px solid #e8412f; background: #000; box-shadow: 0 0 0 1px #000; }
+.atlas-mark.pic.hov img, .atlas-mark.pic.sel img { width: 40px; height: 40px; margin: -7px; box-shadow: 0 0 0 3px #e8412f55; }
+/* seen from far (the whole galaxy and beyond) the targets crowd around the Sun: small pictures, names on hover */
+.nui.atlas.far .atlas-mark.pic:not(.hov):not(.sel) { margin-left: -8px; }
+.nui.atlas.far .atlas-mark.pic:not(.hov):not(.sel) img { width: 13px; height: 13px; border-width: 1px; }
+.nui.atlas.far .atlas-mark.got:not(.hov):not(.sel) span { display: none; }
+
+.nui .atlas-tool { cursor: pointer; margin: 0; padding: 0; box-shadow: none; border-radius: 0; font-family: inherit; }
+.atlas-mark.nolabel:not(.hov):not(.sel) span { display: none; }
+.nui.atlas:fullscreen { border: 0; border-radius: 0; }
+
+/* vertical scale: a hairline with a tick where each region ends and a handle at the current distance */
+.nui .atlas-slider { position: relative; width: 34px; height: 190px; cursor: ns-resize; touch-action: none;
+  background: linear-gradient(#ece7dc55, #ece7dc55) center / 1px 100% no-repeat; }
+.nui .atlas-slider i { position: absolute; left: 11px; width: 12px; height: 1px; background: #a8a296; }
+.nui .atlas-slider b { position: absolute; left: 6px; width: 22px; height: 9px; margin-top: -4px; border-radius: 2px;
+  background: #e8412f; box-shadow: 0 0 0 2px #050505; }
