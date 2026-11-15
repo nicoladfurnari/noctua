@@ -12,6 +12,8 @@ export type AtlasProps = {
   scene: AtlasScene | null
   active: boolean
   thumbUrl: (name: string) => string
+  /** an object to open on (its name, e.g. "M42"): selected and approached once the scene is there */
+  focus?: string
   onAdd?: () => void
   onRefresh?: () => void
   onRemove?: (key: string, file?: string) => void
@@ -82,7 +84,7 @@ function Row({ o, on, onClick, thumbUrl }: { o: AtlasObject; on: boolean; onClic
   )
 }
 
-export function Atlas({ scene, active, thumbUrl, onAdd, onRefresh, onRemove, onOpen }: AtlasProps) {
+export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemove, onOpen }: AtlasProps) {
   const objects = scene?.objects ?? []
   const got = React.useMemo(() => objects.filter((o) => o.captured).sort((a, b) => a.ly - b.ly), [objects])
   const byId = React.useMemo(() => new Map(objects.map((o) => [o.id, o])), [objects])
@@ -127,6 +129,18 @@ export function Atlas({ scene, active, thumbUrl, onAdd, onRefresh, onRemove, onO
     [byId]
   )
   const onArrive = React.useCallback(() => setGoal(null), [])
+  const focused = React.useRef(false)
+  React.useEffect(() => {
+    if (focused.current || !focus || !objects.length) return
+    const key = focus.toLowerCase().replace(/\s+/g, "")
+    const o = objects.find((x) => [x.id, ...x.names].some((n) => n.toLowerCase().replace(/\s+/g, "") === key))
+    focused.current = true
+    if (o) {
+      setSelected(o.id)
+      approach(o)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focus, objects])
   const scale = niceScale((2 * dist * Math.tan((42 * Math.PI) / 360)) / Math.max(height, 200))
   const q = query.trim().toLowerCase()
   const catalogue = React.useMemo(

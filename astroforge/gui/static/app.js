@@ -76,7 +76,9 @@ function go(n) {
     window.scrollTo(0, 0);
   };
   const cur = $(".page.on");
-  if (VT && cur && +cur.dataset.page !== n) {     // not on the first page shown: nothing to fade from
+  // (only in the window being used: a transition waits for a frame, and a page not in front gets none for
+  // seconds, so the page changed late, e.g. when a job ends while Noctua is behind another window)
+  if (VT && cur && +cur.dataset.page !== n && document.hasFocus()) {     // not on the first page shown: nothing to fade from
     const t = document.startViewTransition(apply);
     t.ready.catch(() => {});                       // skipped (hidden tab, another transition): the page changed anyway
     t.updateCallbackDone.catch(e => console.error(e));
@@ -876,6 +878,7 @@ async function loadAtlas() {
   catch (e) { box.innerHTML = `<p class="hint">Atlante non disponibile: ${esc(e.message)}</p>`; return; }
   const props = {
     scene, active: $(".page.on")?.dataset.page === "7", thumbUrl: n => `/api/atlas/thumb/${n}`,
+    focus: decodeURIComponent((location.hash.match(/^#atlante\/(.+)$/) || [])[1] || ""),      // #atlante/M42
     onAdd: () => openBrowser("atlas:file"), onRefresh: loadAtlas,
     onRemove: async (key, file) => {
       if (!confirm("Togliere questo risultato dall'atlante? Il file resta dov'è.")) return;
@@ -2399,4 +2402,4 @@ renderPaths();
 pollQueue();
 addRoots([...state.lights, ...state.calibration, ...state.panels.flat(), state.input,
   ...state.sources.flatMap(x => [...x.lights, ...x.calibration, ...x.masterDirs, x.file].filter(Boolean))])
-  .finally(() => go(state.input && !lightRoots().length ? 5 : 1));
+  .finally(() => go(/^#atlante(\/|$)/.test(location.hash) ? 7 : state.input && !lightRoots().length ? 5 : 1));   // #atlante: straight to the atlas

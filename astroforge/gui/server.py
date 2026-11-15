@@ -128,7 +128,10 @@ def _atlas_thumb(path, side=900):
     try:
         p = Path(path)
         if p.suffix.lower() in (".jpg", ".jpeg", ".png"):
-            im = Image.open(p).convert("RGB")
+            Image.MAX_IMAGE_PIXELS = None            # finished pictures of 200 Mpx (drizzle 4x) are fine: reduced at once
+            im = Image.open(p)
+            im.draft("RGB", (side, side))
+            im = im.convert("RGB")
             im.thumbnail((side, side), Image.LANCZOS)
             buf = _io.BytesIO()
             im.save(buf, "JPEG", quality=86)

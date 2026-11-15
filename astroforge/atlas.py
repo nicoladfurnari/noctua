@@ -186,9 +186,12 @@ def scene():
         ss = sorted(t["sessions"], key=lambda s: s.get("when", ""))
         finals = [s for s in ss if s["kind"] == "final" and s.get("thumb")]
         best = (finals or [s for s in ss if s.get("thumb")] or [None])[-1]
+        # integration time: every result that carries one (an export registered by Noctua has none: its time is
+        # the one of the integration it comes from, already counted)
+        counted = ss
         d.update(captured=True, key=key, sessions=ss, thumb=best["thumb"] if best else "",
-                 exposure_s=sum(s["exposure_s"] or 0 for s in ss if s["kind"] != "final"),
-                 frames=sum(s["frames"] or 0 for s in ss if s["kind"] != "final"),
+                 exposure_s=sum(s["exposure_s"] or 0 for s in counted),
+                 frames=sum(s["frames"] or 0 for s in counted),
                  first=min((s.get("date") or s.get("when", ""))[:10] for s in ss) if ss else "")
         objects[d["id"]] = d
         seen.add(d["id"])
