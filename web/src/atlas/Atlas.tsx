@@ -131,11 +131,13 @@ function Btn({ className, ...p }: React.ComponentProps<"button">) {
   )
 }
 
-function Row({ o, on, onClick, onDouble, thumbUrl }: { o: AtlasObject; on: boolean; onClick: () => void; onDouble?: () => void; thumbUrl: (n: string) => string }) {
+function Row({ o, on, onClick, onDouble, onHover, thumbUrl }: { o: AtlasObject; on: boolean; onClick: () => void; onDouble?: () => void; onHover?: (id: string | null) => void; thumbUrl: (n: string) => string }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onMouseEnter={onHover && (() => onHover(o.id))}
+      onMouseLeave={onHover && (() => onHover(null))}
       onDoubleClick={onDouble}
       className={cn(
         "atlas-row tw:flex tw:w-full tw:items-center tw:gap-2.5 tw:border-0 tw:border-b tw:border-border tw:bg-transparent tw:px-3 tw:py-2 tw:text-left tw:text-foreground tw:transition-colors tw:hover:bg-accent/60",
@@ -199,6 +201,15 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
   }, [byId, selected])
 
   const sel = selected ? byId.get(selected) ?? null : null
+  // hovering an object still to do starts the download of its sky preview: the card opens with it ready
+  React.useEffect(() => {
+    const o = hovered ? byId.get(hovered) : null
+    if (!o || o.captured) return
+    const t = window.setTimeout(() => {
+      new Image().src = `/api/atlas/sky?id=${encodeURIComponent(o.id)}`
+    }, 300)
+    return () => window.clearTimeout(t)
+  }, [hovered, byId])
   const [site, setSite] = React.useState<Site>(scene?.site ?? SITE_DEFAULT)
   React.useEffect(() => {
     if (scene?.site) setSite(scene.site)
@@ -369,7 +380,7 @@ export function Atlas({ scene, active, thumbUrl, focus, onAdd, onRefresh, onRemo
             </label>
             <div className="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
               {catalogue.map((o) => (
-                <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} onDouble={() => flyTo(o.id)} thumbUrl={thumbUrl} />
+                <Row key={o.id} o={o} on={o.id === selected} onClick={() => pick(o.id)} onDouble={() => flyTo(o.id)} onHover={setHovered} thumbUrl={thumbUrl} />
               ))}
             </div>
           </TabsContent>

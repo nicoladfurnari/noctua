@@ -157,11 +157,27 @@ def test_sky_preview_is_downloaded_once_and_falls_back(monkeypatch):
         assert 0.25 <= fov <= 8
         return bytes([0xFF, 0xD8]) + b"jpeg"
 
+    monkeypatch.setitem(atlas._CDS_DOWN, "until", 0.0)
     monkeypatch.setattr(atlas, "_sky_hips2fits", cds)
     monkeypatch.setattr(atlas, "_sky_skyview", skyview)
     r = client.get("/api/atlas/sky", params={"id": "M 51"})
     assert r.status_code == 200 and r.content[:2] == b"\xff\xd8" and calls == ["cds", "skyview"]
     assert client.get("/api/atlas/sky", params={"id": "NGC 5194"}).status_code == 200 and len(calls) == 2   # cached
     assert client.get("/api/atlas/sky", params={"id": "non esiste"}).status_code == 404
+    assert client.get("/api/atlas/sky", params={"id": "M 101"}).status_code == 200
+    assert calls == ["cds", "skyview", "skyview"]          # CDS failed: not asked again for a while (it can hang)
     monkeypatch.setattr(atlas, "_sky_skyview", cds)
     assert client.get("/api/atlas/sky", params={"id": "M 52"}).status_code == 502
+
+
+def test_prefetch_downloads_the_missing_previews_once(monkeypatch):
+    got = []
+    monkeypatch.setitem(atlas._PREFETCH, "started", False)
+    monkeypatch.setenv("ASTROFORGE_ATLAS_PREFETCH", "1")
+    monkeypatch.setattr(atlas, "sky_preview", lambda oid: got.append(oid))
+    assert atlas.prefetch_sky(["M 1", "M 2"], pause=0) and not atlas.prefetch_sky(["M 3"], pause=0)
+    for _ in range(50):
+        if len(got) == 2:
+            break
+        time.sleep(0.05)
+    assert got == ["M 1", "M 2"]

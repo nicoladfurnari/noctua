@@ -270,27 +270,77 @@ def _sky_skyview(o, fov, timeout):
     return buf.getvalue()
 
 
-def sky_preview(oid, timeout=40):
+_CDS_DOWN = {"until": 0.0}          # CDS failed: skip it for a while (its mirror can hang 20-40 s before failing)
+_CDS_PAUSE = 1800
+_SKYVIEW_MAX_FOV = 3.5              # SkyView mosaics many plates for wide fields: 5 deg takes ~13 s, 3.5 ~5 s
+_SKY_LOCKS = {}
+_SKY_LOCKS_LOCK = threading.Lock()
+
+
+def _sky_file(o):
+    return folder() / "sky" / (hashlib.sha1(o["id"].encode()).hexdigest()[:16] + ".jpg")
+
+
+def sky_preview(oid, timeout=6):
     """Path of a DSS2 colour picture of a catalogue object, downloaded once and kept in <atlas>/sky: CDS
-    hips2fits, or NASA SkyView when CDS does not answer. None when the object is unknown; raises OSError when
-    no service answers."""
+    hips2fits (short timeout; after a failure it is left alone for half an hour), else NASA SkyView. None when
+    the object is unknown; raises OSError when no service answers."""
     o = catalogs.find(oid)
     if o is None:
         return None
-    d = folder() / "sky"
-    d.mkdir(exist_ok=True)
-    f = d / (hashlib.sha1(o["id"].encode()).hexdigest()[:16] + ".jpg")
+    f = _sky_file(o)
     if f.is_file() and f.stat().st_size > 0:
         return f
-    fov = sky_fov(o)
-    try:
-        raw = _sky_hips2fits(o, fov, timeout)
-    except OSError:
-        raw = _sky_skyview(o, fov, max(timeout, 60))
-    tmp = f.with_suffix(".tmp")
-    tmp.write_bytes(raw)
-    os.replace(tmp, f)
-    return f
+    with _SKY_LOCKS_LOCK:
+        lock = _SKY_LOCKS.setdefault(o["id"], threading.Lock())
+    with lock:                                    # a click and the prefetch on the same object: one download
+        if f.is_file() and f.stat().st_size > 0:
+            return f
+        f.parent.mkdir(exist_ok=True)
+        fov = sky_fov(o)
+        raw = None
+        if time.time() >= _CDS_DOWN["until"]:
+            try:
+                raw = _sky_hips2fits(o, fov, timeout)
+            except OSError:
+                _CDS_DOWN["until"] = time.time() + _CDS_PAUSE
+        if raw is None:
+            raw = _sky_skyview(o, min(fov, _SKYVIEW_MAX_FOV), 60)
+        tmp = f.with_suffix(f".{threading.get_ident()}.tmp")
+        tmp.write_bytes(raw)
+        os.replace(tmp, f)
+        return f
+
+
+_PREFETCH = {"started": False}
+
+
+def prefetch_sky(ids, pause=0.5):
+    """Download in the background, one at a time, the previews still missing (Messier first): after one pass
+    every card opens at once. Started once per process; stops at the first object whose download fails twice
+    in a row (no Internet)."""
+    if _PREFETCH["started"] or os.environ.get("ASTROFORGE_ATLAS_PREFETCH", "1") == "0":
+        return False
+    _PREFETCH["started"] = True
+
+    def run():
+        fails = 0
+        for oid in ids:
+            o = catalogs.find(oid)
+            if o is None or _sky_file(o).is_file():
+                continue
+            try:
+                sky_preview(oid)
+                fails = 0
+            except Exception:
+                fails += 1
+                if fails >= 2:
+                    _PREFETCH["started"] = False           # try again on the next visit of the atlas page
+                    return
+            time.sleep(pause)
+
+    threading.Thread(target=run, daemon=True, name="atlas-sky-prefetch").start()
+    return True
 
 
 # ------------------------------------------------------------------ the scene

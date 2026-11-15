@@ -210,9 +210,14 @@ def _atlas_record(job):
 
 @router.get("/api/atlas")
 def atlas_scene():
-    """The 3D map: catalogue objects with a known distance + the registered targets (astroforge.atlas.scene)."""
+    """The 3D map: catalogue objects with a known distance + the registered targets (astroforge.atlas.scene).
+    The first call also starts the background download of the sky previews of the targets still to do."""
     from .. import atlas
-    return atlas.scene()
+    s = atlas.scene()
+    todo = [o for o in s["objects"] if not o["captured"]]
+    todo.sort(key=lambda o: (not str(o["name"]).startswith("M"), o["ly"]))
+    atlas.prefetch_sky([o["id"] for o in todo])
+    return s
 
 
 @router.get("/api/atlas/thumb/{name}")
